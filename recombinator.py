@@ -11,6 +11,7 @@ def main():
     p.add_argument("--min-depth", dest='min_depth', type=int, default=20)
     p.add_argument("--min-gq", dest='min_gq', type=int, default=30)
     p.add_argument("--family", dest='family', required=True)
+    p.add_argument("--parent", dest='parent', default="dad", choices=['dad', 'mom'])    
     p.add_argument("--ped", dest='ped', required=True)
     p.add_argument("--vcf", dest='vcf', required=True)
     args = p.parse_args()
@@ -106,9 +107,15 @@ def run(args):
         if not is_informative(f):
             continue
 
-        # detect paternal crossovers.
-        # TODO: maternal.
-        if f['dad']['gt_type'] == 1 and f['mom']['gt_type'] == 0:
+        # detect crossovers.
+        if args.parent == 'dad':
+            p1 = "dad"
+            p2 = "mom"
+        else:
+            p2 = "dad"
+            p1 = "mom"
+
+        if f[p1]['gt_type'] == 0 and f[p2]['gt_type'] == 1:
             if f['template']['gt_type'] == f['sib']['gt_type']:
                 print '\t'.join(str(s) for s in [v.CHROM, v.POS-1, v.POS, 1, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
             else:
