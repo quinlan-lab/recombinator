@@ -5,6 +5,10 @@ from collections import defaultdict
 from cyvcf2 import VCF
 from pedagree import Ped
 
+HOM_REF = 0
+HET     = 1
+HOM_ALT = 3
+UNKNOWN = 2
 
 def main():
     p = argparse.ArgumentParser()
@@ -16,6 +20,7 @@ def main():
     p.add_argument("--vcf", dest='vcf', required=True)
     args = p.parse_args()
     run(args)
+
 
 def get_family_dict(fam, smp2idx):
     """
@@ -64,7 +69,7 @@ def impose_quality_control(fam, args):
     gt_quals = [fam[f]['gt_qual'] for f in fam]
     gt_depths = [fam[f]['gt_depth'] for f in fam]
 
-    if any(g == 2 for g in gt_types):
+    if any(g == UNKNOWN for g in gt_types):
         return False
     if any(g < args.min_gq for g in gt_quals):
         return False
@@ -78,9 +83,9 @@ def is_informative(fam):
     to be useful for catching recombination,
     one parent must be HET and the other HOM
     """
-    if (fam['mom']['gt_type'] == 0 and fam['dad']['gt_type'] == 1) \
+    if (fam['mom']['gt_type'] == HOM_REF and fam['dad']['gt_type'] == HET) \
          or \
-         (fam['mom']['gt_type'] == 1 and fam['dad']['gt_type'] == 0):
+         (fam['mom']['gt_type'] == HET and fam['dad']['gt_type'] == HOM_REF):
         return True
     else:
         return False
@@ -121,7 +126,7 @@ def run(args):
         if args.parent == 'mom':
             p1, p2 = p2, p1
 
-        if f[p1]['gt_type'] == 1 and f[p2]['gt_type'] == 0:
+        if f[p1]['gt_type'] == HET and f[p2]['gt_type'] == HOM_REF:
             if f['template']['gt_type'] == f['sib']['gt_type']:
                 print '\t'.join(str(s) for s in [v.CHROM, v.POS-1, v.POS, 1, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
             else:
