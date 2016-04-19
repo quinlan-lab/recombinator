@@ -27,16 +27,20 @@ def get_family_dict(fam, smp2idx):
         if sample.dad is None and sample.mom is None:
             if sample.sex == "male":
                 f['dad']['idx'] = smp2idx[sample.sample_id]
+                f['dad']['id'] = sample.sample_id
             elif sample.sex == "female":
                 f['mom']['idx'] = smp2idx[sample.sample_id]
+                f['mom']['id'] = sample.sample_id
         else:
             # first kid is template.
             # better? smarter?
             if kid_seen == False:
                 f['template']['idx'] = smp2idx[sample.sample_id]
+                f['template']['id'] = sample.sample_id
                 kid_seen = True
             else:
                 f['sib']['idx'] = smp2idx[sample.sample_id]
+                f['sib']['id'] = sample.sample_id
     return f
 
 
@@ -95,6 +99,10 @@ def run(args):
     # create a simple dictionary of info for each family member
     f = get_family_dict(fam, smp2idx)
 
+    # header
+    print '\t'.join(['chrom', 'start', 'end', 'same(1)_diff(2)', 
+        'dad_'+f['dad']['id'], 'mom_'+f['mom']['id'], 
+        'template_'+f['template']['id'], 'sib_'+f['sib']['id']])
     for v in vcf:
         # embellish f with the genotype info for each family member.
         add_genotype_info(f, v)
@@ -108,12 +116,10 @@ def run(args):
             continue
 
         # detect crossovers.
-        if args.parent == 'dad':
-            p1 = "dad"
-            p2 = "mom"
-        else:
-            p2 = "dad"
-            p1 = "mom"
+        p1 = "dad"
+        p2 = "mom"
+        if args.parent == 'mom':
+            p1, p2 = p2, p1
 
         if f[p1]['gt_type'] == 0 and f[p2]['gt_type'] == 1:
             if f['template']['gt_type'] == f['sib']['gt_type']:
