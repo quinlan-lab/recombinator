@@ -1,4 +1,5 @@
 import argparse
+import sys
 import re
 import itertools as it
 from collections import defaultdict
@@ -99,7 +100,9 @@ def run(args):
     smp2idx = dict(zip(vcf.samples, range(len(vcf.samples))))
 
     # get the Ped objects for the family of interest
-    fam = ped.families[args.family]
+    fam = ped.families.get(args.family)
+    if fam is None:
+        sys.exit('Family %s not found in ped file' % args.family)
 
     # create a simple dictionary of info for each family member
     f = get_family_dict(fam, smp2idx)
@@ -113,7 +116,7 @@ def run(args):
         add_genotype_info(f, v)
     
         # sanity and quality checks
-        if not (len(v.REF) == 1 and len(v.ALT) == 1):
+        if not v.var_type == 'snp':
             continue
         if not impose_quality_control(f, args):
             continue
