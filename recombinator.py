@@ -121,7 +121,7 @@ def run(args):
         if args.parent == 'mom':
             p1, p2 = p2, p1
 
-        if f[p1]['gt_type'] == 0 and f[p2]['gt_type'] == 1:
+        if f[p1]['gt_type'] == 1 and f[p2]['gt_type'] == 0:
             if f['template']['gt_type'] == f['sib']['gt_type']:
                 print '\t'.join(str(s) for s in [v.CHROM, v.POS-1, v.POS, 1, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
             else:
