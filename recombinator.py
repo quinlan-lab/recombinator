@@ -29,6 +29,8 @@ def get_family_dict(fam, smp2idx):
             elif sample.sex == "female":
                 f['mom']['idx'] = smp2idx[sample.sample_id]
         else:
+            # first kid is template.
+            # better? smarter?
             if kid_seen == False:
                 f['template']['idx'] = smp2idx[sample.sample_id]
                 kid_seen = True
