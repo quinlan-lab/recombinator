@@ -48,6 +48,7 @@ For dad:
 	1	20165	20166	1	A/G	A/A	A/A	A/A
 
 Mark crossovers:
+
     python remove_noise.py --bg K34175.paternal.crossovers.bedgraph \
     | awk '{if ($4 =="1") {print $1"\t"$2"\t"$3"\t.\t.\t+"} else {print $1"\t"$2"\t"$3"\t.\t.\t-"}}' \
     | bedtools merge -s -i - \
