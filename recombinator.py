@@ -4,19 +4,22 @@ import re
 import itertools as it
 from collections import defaultdict
 from cyvcf2 import VCF
+
 from pedagree import Ped
 
 HOM_REF = 0
-HET     = 1
+HET = 1
 HOM_ALT = 3
 UNKNOWN = 2
+
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--min-depth", dest='min_depth', type=int, default=20)
     p.add_argument("--min-gq", dest='min_gq', type=int, default=30)
     p.add_argument("--family", dest='family', required=True)
-    p.add_argument("--parent", dest='parent', default="dad", choices=['dad', 'mom'])    
+    p.add_argument("--parent", dest='parent',
+                   default="dad", choices=['dad', 'mom'])
     p.add_argument("--ped", dest='ped', required=True)
     p.add_argument("--vcf", dest='vcf', required=True)
     args = p.parse_args()
@@ -58,8 +61,8 @@ def add_genotype_info(fam, variant):
         fam[f]['gt_type'] = variant.gt_types[fam[f]['idx']]
         fam[f]['gt_base'] = variant.gt_bases[fam[f]['idx']]
         fam[f]['gt_phase'] = variant.gt_phases[fam[f]['idx']]
-        fam[f]['gt_depth'] = variant.gt_depths[fam[f]['idx']]        
-        fam[f]['gt_qual'] = variant.gt_quals[fam[f]['idx']]        
+        fam[f]['gt_depth'] = variant.gt_depths[fam[f]['idx']]
+        fam[f]['gt_qual'] = variant.gt_quals[fam[f]['idx']]
 
 
 def impose_quality_control(fam, args):
@@ -78,6 +81,7 @@ def impose_quality_control(fam, args):
         return False
     return True
 
+
 def is_informative(fam):
     """
     Is the site informative in the sense that
@@ -85,8 +89,8 @@ def is_informative(fam):
     one parent must be HET and the other HOM
     """
     if (fam['mom']['gt_type'] == HOM_REF and fam['dad']['gt_type'] == HET) \
-         or \
-         (fam['mom']['gt_type'] == HET and fam['dad']['gt_type'] == HOM_REF):
+            or \
+            (fam['mom']['gt_type'] == HET and fam['dad']['gt_type'] == HOM_REF):
         return True
     else:
         return False
@@ -108,13 +112,13 @@ def run(args):
     f = get_family_dict(fam, smp2idx)
 
     # header
-    print '\t'.join(['chrom', 'start', 'end', 'same(1)_diff(2)', 
-        'dad_'+f['dad']['id'], 'mom_'+f['mom']['id'], 
-        'template_'+f['template']['id'], 'sib_'+f['sib']['id']])
+    print '\t'.join(['chrom', 'start', 'end', 'same(1)_diff(2)',
+                     'dad_' + f['dad']['id'], 'mom_' + f['mom']['id'],
+                     'template_' + f['template']['id'], 'sib_' + f['sib']['id']])
     for v in vcf:
         # embellish f with the genotype info for each family member.
         add_genotype_info(f, v)
-    
+
         # sanity and quality checks
         if not v.var_type == 'snp':
             continue
@@ -131,9 +135,9 @@ def run(args):
 
         if f[p1]['gt_type'] == HET and f[p2]['gt_type'] == HOM_REF:
             if f['template']['gt_type'] == f['sib']['gt_type']:
-                print '\t'.join(str(s) for s in [v.CHROM, v.POS-1, v.POS, 1, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
+                print '\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS, 1, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
             else:
-                print '\t'.join(str(s) for s in [v.CHROM, v.POS-1, v.POS, 2, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
+                print '\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS, 2, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
 
 if __name__ == "__main__":
     main()

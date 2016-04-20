@@ -46,3 +46,14 @@ For dad:
 	1	20155	20156	1	C/T	C/C	C/T	C/T
 	1	20157	20158	1	A/C	A/A	A/A	A/A
 	1	20165	20166	1	A/G	A/A	A/A	A/A
+
+Mark crossovers:
+    python remove_noise.py --bg K34175.paternal.crossovers.bedgraph \
+    | awk '{if ($4 =="1") {print $1"\t"$2"\t"$3"\t.\t.\t+"} else {print $1"\t"$2"\t"$3"\t.\t.\t-"}}' \
+    | bedtools merge -s -i - \
+    | bedtools groupby -g 1,4 -c 2,3 -o min,max \
+    | awk '{if ($2=="+"){print $1"\t"$3"\t"$4"\t1"} else {print $1"\t"$3"\t"$4"\t2"}}' \
+    | python report_crossovers.py --bg /dev/stdin
+    1	8199262	8213868
+    1	64090376	64096094
+    1	165191701	165193662
