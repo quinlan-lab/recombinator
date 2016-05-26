@@ -20,8 +20,8 @@ cat << EOF > $script
 #SBATCH --ntasks=1
 #SBATCH -J $f
 
-#SBATCH -o load-$f.out
-#SBATCH -e load-$f.err
+#SBATCH -o logs/recombinator-$f.out
+#SBATCH -e logs/recombinator-$f.err
 
 set -eo pipefail -o nounset
 
