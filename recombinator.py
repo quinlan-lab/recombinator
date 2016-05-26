@@ -2,26 +2,24 @@ import argparse
 import sys
 import re
 import itertools as it
+import numpy as np
 from collections import defaultdict
 from cyvcf2 import VCF
+from operator import itemgetter, attrgetter
 
-from pedagree import Ped
+from peddy import Ped
 
-HOM_REF = 0
-HET = 1
-HOM_ALT = 3
-UNKNOWN = 2
+HOM_REF, HET, HOM_ALT, UNKNOWN = range(4)
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--min-depth", dest='min_depth', type=int, default=20)
     p.add_argument("--min-gq", dest='min_gq', type=int, default=30)
-    p.add_argument("--family", dest='family', required=True)
-    p.add_argument("--parent", dest='parent',
-                   default="dad", choices=['dad', 'mom'])
-    p.add_argument("--ped", dest='ped', required=True)
-    p.add_argument("--vcf", dest='vcf', required=True)
+    p.add_argument("--families", default=None, type=str)
+    p.add_argument("--ped", required=True)
+    p.add_argument("--vcf", required=True)
+    p.add_argument("--region", help="optional VCF region e.g. '1:1-1000000'")
     args = p.parse_args()
     run(args)
 
@@ -30,55 +28,60 @@ def get_family_dict(fam, smp2idx):
     """
     Hack to just get the VCF idxs for the dad, mom and kids
     """
-    f = defaultdict(defaultdict)
+    f = {}
     kid_seen = False
     for sample in fam.samples:
-        if sample.dad is None and sample.mom is None:
-            if sample.sex == "male":
-                f['dad']['idx'] = smp2idx[sample.sample_id]
-                f['dad']['id'] = sample.sample_id
-            elif sample.sex == "female":
-                f['mom']['idx'] = smp2idx[sample.sample_id]
-                f['mom']['id'] = sample.sample_id
-        else:
-            # first kid is template.
-            # better? smarter?
-            if kid_seen == False:
-                f['template']['idx'] = smp2idx[sample.sample_id]
-                f['template']['id'] = sample.sample_id
-                kid_seen = True
-            else:
-                f['sib']['idx'] = smp2idx[sample.sample_id]
-                f['sib']['id'] = sample.sample_id
+        # NOTE: we currently just pull a single quartet from the family...
+        if not sample.sex in ("male", "female"): continue
+        kids = [s for s in sample.kids if not None in (s.mom, s.dad)]
+        if len(kids) < 2: continue
+
+        key = 'dad' if sample.sex == "male" else 'mom'
+        f[key] = {'idx': smp2idx[sample.sample_id], 'id': sample.sample_id}
+
+        for i, kid in enumerate(sorted(sample.kids, key=attrgetter('affected'), reverse=True)):
+            if i == 2: break # only use first 2 kids
+            key = 'sib' if i > 0 else 'template'
+            f[key] = {'idx': smp2idx[kid.sample_id], 'id': kid.sample_id}
+
+        other = kid.mom if sample.sex == "male" else sample.dad
+        key = 'dad' if other.sex == "male" else 'mom'
+        f[key] = {'idx': smp2idx[other.sample_id], 'id': other.sample_id}
+        break
+    if not f:
+        return False
+
+    # must faster to index with an array.
+    f['idxs'] = np.array([f[s]['idx'] for s in ('dad', 'mom', 'sib', 'template')])
+    f['family_id'] = sample.family_id
     return f
 
-
-def add_genotype_info(fam, variant):
+def add_genotype_info(fam, gt_types=None,
+        gt_depths=None, gt_quals=None):
     """
     Assign the genotype info to each member in the family
     """
-    for f in fam:
-        fam[f]['gt_type'] = variant.gt_types[fam[f]['idx']]
-        fam[f]['gt_base'] = variant.gt_bases[fam[f]['idx']]
-        fam[f]['gt_phase'] = variant.gt_phases[fam[f]['idx']]
-        fam[f]['gt_depth'] = variant.gt_depths[fam[f]['idx']]
-        fam[f]['gt_qual'] = variant.gt_quals[fam[f]['idx']]
-
+    if not gt_types is None:
+        fam['gt_type'] = gt_types[fam['idxs']]
+    if not gt_depths is None:
+        fam['gt_depth'] = gt_depths[fam['idxs']]
+    if not gt_quals is None:
+        fam['gt_qual'] = gt_quals[fam['idxs']]
 
 def impose_quality_control(fam, args):
     """
     Make sure the genotype data for the family is up to snuff
     """
-    gt_types = [fam[f]['gt_type'] for f in fam]
-    gt_quals = [fam[f]['gt_qual'] for f in fam]
-    gt_depths = [fam[f]['gt_depth'] for f in fam]
+    # NOTE: any is much faster than np.any for small arrays.
+    if any(fam['gt_type'] == UNKNOWN):
+        return False
 
-    if any(g == UNKNOWN for g in gt_types):
+    if any(fam['gt_qual'] < args.min_gq):
         return False
-    if any(g < args.min_gq for g in gt_quals):
+
+    if any(fam['gt_depth'] < args.min_depth):
         return False
-    if any(g < args.min_depth for g in gt_depths):
-        return False
+
     return True
 
 
@@ -88,56 +91,80 @@ def is_informative(fam):
     to be useful for catching recombination,
     one parent must be HET and the other HOM
     """
-    if (fam['mom']['gt_type'] == HOM_REF and fam['dad']['gt_type'] == HET) \
-            or \
-            (fam['mom']['gt_type'] == HET and fam['dad']['gt_type'] == HOM_REF):
-        return True
-    else:
-        return False
-
+    gt_types = fam['gt_type']  # order is dad, then mom
+    return (gt_types[1] == HOM_REF and gt_types[0] == HET) or \
+           (gt_types[0] == HOM_REF and gt_types[1] == HET)
 
 def run(args):
-    vcf = VCF(args.vcf)
     ped = Ped(args.ped)
+    vcf = VCF(args.vcf, gts012=True)
+
+    ped_samples = [s.sample_id for s in ped.samples()]
+    vcf_samples = set(vcf.samples)
+
+    samples = [s for s in ped_samples if s in vcf_samples]
+
+    vcf = VCF(args.vcf, samples=samples, gts012=True)
+    if args.region:
+        vcf_iter = vcf(args.region)
+    else:
+        vcf_iter = vcf
 
     # build a dict of sample_id to sample index
     smp2idx = dict(zip(vcf.samples, range(len(vcf.samples))))
 
     # get the Ped objects for the family of interest
-    fam = ped.families.get(args.family)
-    if fam is None:
-        sys.exit('Family %s not found in ped file' % args.family)
+    if args.families is None:
+        fams = ped.families.values()
+    else:
+        fams = [ped.families[f] for f in args.families.split(",")]
+    if len(fams) == 0:
+        sys.exit('Families %s not found in ped file' % args.families)
 
     # create a simple dictionary of info for each family member
-    f = get_family_dict(fam, smp2idx)
+    fs = [get_family_dict(fam, smp2idx) for fam in fams]
 
     # header
-    print '\t'.join(['chrom', 'start', 'end', 'same(1)_diff(2)',
-                     'dad_' + f['dad']['id'], 'mom_' + f['mom']['id'],
-                     'template_' + f['template']['id'], 'sib_' + f['sib']['id']])
-    for v in vcf:
-        # embellish f with the genotype info for each family member.
-        add_genotype_info(f, v)
-
-        # sanity and quality checks
+    print '\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same(1)_diff(2)',
+                     'dad', 'mom', 'sib1', 'sib2'])
+    for i, v in enumerate(vcf_iter, start=1):
+        if i % 50000 == 0:
+            print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
+            if i == 500000: break
         if not v.var_type == 'snp':
             continue
-        if not impose_quality_control(f, args):
-            continue
-        if not is_informative(f):
-            continue
 
-        # detect crossovers.
-        p1 = "dad"
-        p2 = "mom"
-        if args.parent == 'mom':
-            p1, p2 = p2, p1
+        # expensive to get gt_bases and we only need it at the crossover.
+        gt_bases = None
+        gt_types, gt_quals, gt_depths = v.gt_types, v.gt_quals, v.gt_depths
+        for f in fs:
 
-        if f[p1]['gt_type'] == HET and f[p2]['gt_type'] == HOM_REF:
-            if f['template']['gt_type'] == f['sib']['gt_type']:
-                print '\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS, 1, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
-            else:
-                print '\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS, 2, f['dad']['gt_base'], f['mom']['gt_base'], f['template']['gt_base'], f['sib']['gt_base']])
+
+            # embellish f with the genotype info for each family member.
+            # is_informative only needs gt_types, so we check that first...
+            add_genotype_info(f, gt_types=gt_types)
+            # sanity and quality checks
+            if not is_informative(f):
+                continue
+
+            # now wee need to add quality and depth.
+            add_genotype_info(f, gt_quals=gt_quals, gt_depths=gt_depths)
+
+            if not impose_quality_control(f, args):
+                continue
+
+            # detect crossovers.
+            for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
+
+                if f['gt_type'][p1] == HET and f['gt_type'][p2] == HOM_REF:
+                    if gt_bases is None:
+                        gt_bases = v.gt_bases
+                    fam_bases = "\t".join(gt_bases[f['idxs']])
+
+                    val = 1 if f['gt_type'][2] == f['gt_type'][3] else 2
+                    print '\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
+                            parent, f['family_id'], val, fam_bases])
+                    sys.stdout.flush()
 
 if __name__ == "__main__":
     main()
