@@ -44,7 +44,8 @@ def get_family_dict(fam, smp2idx):
             key = 'sib' if i > 0 else 'template'
             f[key] = {'idx': smp2idx[kid.sample_id], 'id': kid.sample_id}
 
-        other = kid.mom if sample.sex == "male" else sample.dad
+        other = kid.mom if sample.sex == "male" else kid.dad
+        assert other.sample_id != sample.sample_id
         key = 'dad' if other.sex == "male" else 'mom'
         f[key] = {'idx': smp2idx[other.sample_id], 'id': other.sample_id}
         break
@@ -126,7 +127,7 @@ def run(args):
 
     # header
     print '\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same(1)_diff(2)',
-                     'dad', 'mom', 'sib1', 'sib2'])
+                     'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90'])
     for i, v in enumerate(vcf_iter, start=1):
         if i % 50000 == 0:
             print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
@@ -160,10 +161,13 @@ def run(args):
                     if gt_bases is None:
                         gt_bases = v.gt_bases
                     fam_bases = "\t".join(gt_bases[f['idxs']])
+                    pctiles = "|".join("%.0f" % v for v in
+                            np.percentile(v.gt_depths, (1, 10, 50, 90)))
 
                     val = 1 if f['gt_type'][2] == f['gt_type'][3] else 2
                     print '\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
-                            parent, f['family_id'], val, fam_bases])
+                            parent, f['family_id'], val, fam_bases, "%.2f" %
+                            v.call_rate, pctiles])
                     sys.stdout.flush()
 
 if __name__ == "__main__":
