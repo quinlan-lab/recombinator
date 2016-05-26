@@ -131,7 +131,6 @@ def run(args):
     for i, v in enumerate(vcf_iter, start=1):
         if i % 50000 == 0:
             print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
-            if i == 500000: break
         if not v.var_type == 'snp':
             continue
 
