@@ -39,7 +39,7 @@ echo "\
 python recombinator.py --min-gq 20 --min-depth 20 --region $region \\
 	--vcf ~u6000771/Data/519FamiliesUnrecal_snp-recal_indel-recal.vcf.gz \\
 	--ped ~u6000771/Data/ssc_519.ped \
-	| bgzip -c > results/$f.bed.bz &
+	| bgzip -c > results/$f.bed.gz &
 " >> $script
 done
 
