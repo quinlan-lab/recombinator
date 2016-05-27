@@ -12,7 +12,8 @@ def main():
     run(args)
 
 
-def report(block, family_id, parent, keys=['chrom', 'start', 'end', 'state']):
+def report(block, id, keys=['chrom', 'start', 'end', 'state']):
+    family_id, parent = id
     print '\t'.join([str(block[k]) for k in keys] + [parent, family_id])
 
 
@@ -37,39 +38,57 @@ chrom	start	end	parent	family_id	same(1)_diff(2)	dad	mom	sib1	sib2	global_call_r
     print "\t".join("chrom start end state parent family_id".split())
     last_block = defaultdict(dict)
     next_block = defaultdict(dict)
-    all_prev = {}
-    curr = {}
+    block = last_block
     last_chrom = None
 
-    for l in ts.reader(args.bedgraph):
-        assert last_chrom is None or last_chrom == l['chrom']
-        last_chrom = l['chrom']
+    for curr in ts.reader(args.bedgraph):
+        if curr['chrom'] == 'chrom' and curr['start'] == 'start': continue
+        assert last_chrom is None or last_chrom == curr['chrom'], (last_chrom, curr['chrom'])
+        last_chrom = curr['chrom']
+        curr['state'] = curr['same(1)_diff(2)']
 
-        curr = l
-        id = curr['family_id'], parent
-        if all_prev.get(id) is None:
-            last_block[id]['chrom'] = curr['chrom']
-            last_block[id]['start'] = int(curr['start'])
-            last_block[id]['end'] = int(curr['end'])
-            last_block[id]['state'] = curr['same(1)_diff(2)']
-            all_prev[id] = curr
+        id = curr['family_id'], curr['parent']
+        if block.get(id) is None:
+            block[id]['chrom'] = curr['chrom']
+            block[id]['start'] = int(curr['start'])
+            block[id]['end'] = int(curr['end'])
+            block[id]['state'] = curr['state']
+            continue
+
+
+        prev = block[id]
+        if curr['state'] != prev['state']:
+            if block == last_block:
+                # next_block is empty, so we start filling it.
+                block = next_block
+                assert block.get(id) is None
+                block[id]['chrom'] = curr['chrom']
+                block[id]['start'] = int(curr['start'])
+                block[id]['end'] = int(curr['end'])
+                block[id]['state'] = curr['state']
+
+            else:  # switched states.
+                # we check if next_block was big enough so we know if we can
+                # drop last_block
+                if next_block[id]['end'] - next_block[id]['start'] > args.min_size:
+                    # report last_block if it was big enough
+                    if last_block[id]['end'] - last_block[id]['start'] > args.min_size:
+                        print >>sys.stderr, "reporting last"
+                        report(last_block[id], id)
+
+                    last_block = next_block
+                # either way, empty next_block
+                next_block = defaultdict(dict)
+                block = last_block
+
         else:
-            prev = all_prev[id]
-            if curr['same(1)_diff(2)'] != prev['same(1)_diff(2)']:
-                if last_block[id]['end'] - last_block[id]['start'] > args.min_size:
-                    report(last_block[id], id, parent)
-                    last_block[id]['start'] = int(curr['start'])
-                    last_block[id]['chrom'] = curr['chrom']
-                    last_block[id]['state'] = curr['same(1)_diff(2)']
-                    last_block[id]['end'] = int(curr['end'])
-            else:
-                last_block[id]['end'] = int(curr['end'])
+            block[id]['end'] = int(curr['end'])
 
-        all_prev[id] = curr
     # cleanup of last blocks
-    #for id, d in last_block.items():
-    #    if d['end'] - d['start'] > args.min_size:
-    #        report(d, id, parent)
+    for block in (next_block, last_block):
+        for id, d in block.items():
+            if d['end'] - d['start'] > args.min_size:
+                report(d, id)
 
 if __name__ == "__main__":
     main()
