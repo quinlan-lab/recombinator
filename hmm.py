@@ -7,9 +7,9 @@ import sys
 
 np.random.seed(42)
 
-eps = 1e-20
+eps = 1e-7
 
-def fit(obs, noise_pct=0.3):
+def fit(obs, noise_pct=0.3, eps=eps, pseudocount=300):
     """
     #>>> obs = [0] * 200 + [0, 1, 0, 1, 0] + [1] * 200
     #>>> fit(obs)
@@ -36,10 +36,10 @@ def fit(obs, noise_pct=0.3):
     #>>> fit(obs)
     array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    #>>> obs = [0, 1, 0, 1, 0] + [1] * 400
-    #>>> res = fit(obs)
-    #>>> np.all(res == 1)
-    #True
+    >>> obs = [0, 1, 0, 1, 0] + [1] * 400
+    >>> res = fit(obs)
+    >>> np.all(res == 1)
+    True
     """
     obs = np.asarray(obs)
     if obs.max() == 2:
@@ -70,20 +70,19 @@ def fit(obs, noise_pct=0.3):
     model.add_transition(model.start, inoise, 0.002)
 
 
-    model.add_transition(i0, i0, 1 - 1.1 * eps)
+    model.add_transition(i0, i0, 1 - 2.0 * eps, pseudocount=pseudocount)
     model.add_transition(i0, i1, eps)
-    model.add_transition(i0, inoise, 0.1 * eps)
+    model.add_transition(i0, inoise, eps)
 
-    model.add_transition(i1, i1, 1 - 1.1 * eps)
+    model.add_transition(i1, i1, 1 - 2.0 * eps, pseudocount=pseudocount)
     model.add_transition(i1, i0, eps)
-    model.add_transition(i1, inoise, 0.1 * eps)
+    model.add_transition(i1, inoise, eps)
 
-    model.add_transition(inoise, inoise, 1 - 8 * eps)
-    model.add_transition(inoise, i0, 4 * eps)
-    model.add_transition(inoise, i1, 4 * eps)
+    model.add_transition(inoise, inoise, 1 - 20 * eps)
+    model.add_transition(inoise, i0, 10 * eps)
+    model.add_transition(inoise, i1, 10 * eps)
 
     model.bake()
-    #model.fit(obs)
     _, path = model.viterbi(obs)
     #return np.array([x[0] for x in path[1:]])
     return np.array([int(x[1].name) for x in path[1:]])
