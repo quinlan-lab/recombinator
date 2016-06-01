@@ -78,6 +78,8 @@ def main(args=None):
         rows.append((d['chrom'], int(d['start']), v, d))
     rows.sort()
 
+    if len(rows) == 0:
+        return
     vals = fit([r[2] for r in rows])
 
     for i, row in enumerate((r[-1] for r in rows)):
