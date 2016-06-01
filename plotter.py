@@ -11,9 +11,12 @@ axes[0].set_title("raw")
 axes[1].set_title("x-over")
 axes[2].set_title("hmm")
 
-rdr = ts.reader(1)
-
-row = next(rdr)
+try:
+    rdr = ts.reader(1)
+    row = next(rdr)
+except StopIteration:
+    sys.stderr.write("%s was empty\n" % sys.argv[1])
+    sys.exit(0)
 last_hstart = last_ostart = int(row['start'])
 last_o = int(row['same(1)_diff(2)'])
 last_h = int(row['hmm-state'])
