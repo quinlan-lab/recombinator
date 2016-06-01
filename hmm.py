@@ -7,9 +7,9 @@ import sys
 
 np.random.seed(42)
 
-eps = 1e-8
+eps = 1e-20
 
-def fit(obs, noise_pct=0.2):
+def fit(obs, noise_pct=0.3):
     """
     #>>> obs = [0] * 200 + [0, 1, 0, 1, 0] + [1] * 200
     #>>> fit(obs)
@@ -52,31 +52,41 @@ def fit(obs, noise_pct=0.2):
     model = po.HiddenMarkovModel("crossover")
 
     # allow, e.g. 6% of sites in a true state 1 to appear as state 0
-    di0 = po.DiscreteDistribution({1: 1 - noise_pct, 0: noise_pct})
-    di1 = po.DiscreteDistribution({0: 1 - noise_pct, 1: noise_pct})
+    di0 = po.DiscreteDistribution({0: 1 - noise_pct, 1: noise_pct})
+    di1 = po.DiscreteDistribution({1: 1 - noise_pct, 0: noise_pct})
+
+    dnoise = po.DiscreteDistribution({0: 0.5, 1: 0.5})
 
     i0 = po.State(di0, name="0")
     i1 = po.State(di1, name="1")
+    inoise = po.State(dnoise, name="2")
 
-    model.add_states(i0, i1)
+    model.add_states([i0, i1, inoise])
 
-    m = np.mean(obs[:50])
+    m = np.mean(obs[:200])
 
-    model.add_transition(model.start, i0, m)
-    model.add_transition(model.start, i1, 1 - m)
+    model.add_transition(model.start, i0, m - 0.001)
+    model.add_transition(model.start, i1, 1 - m - 0.001)
+    model.add_transition(model.start, inoise, 0.002)
 
-    model.add_transition(i0, i0, 1 - eps)
-    model.add_transition(i1, i1, 1 - eps)
+
+    model.add_transition(i0, i0, 1 - 1.1 * eps)
     model.add_transition(i0, i1, eps)
+    model.add_transition(i0, inoise, 0.1 * eps)
+
+    model.add_transition(i1, i1, 1 - 1.1 * eps)
     model.add_transition(i1, i0, eps)
+    model.add_transition(i1, inoise, 0.1 * eps)
+
+    model.add_transition(inoise, inoise, 1 - 8 * eps)
+    model.add_transition(inoise, i0, 4 * eps)
+    model.add_transition(inoise, i1, 4 * eps)
 
     model.bake()
-    _, path = model.viterbi(obs)
     #model.fit(obs)
-    v = np.array([x[0] for x in path[1:]])
-    if np.abs(v - obs).mean() > 0.5:
-        v = 1 - v
-    return v
+    _, path = model.viterbi(obs)
+    #return np.array([x[0] for x in path[1:]])
+    return np.array([int(x[1].name) for x in path[1:]])
 
 def main(args=None):
 
