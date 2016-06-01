@@ -1,3 +1,7 @@
+import matplotlib
+import sys
+if len(sys.argv) > 2:
+    matplotlib.use('Agg')
 import seaborn as sns
 import matplotlib.pyplot as plt
 import toolshed as ts
@@ -52,5 +56,7 @@ axes[1].set_yticklabels(['state0', 'state1'])
 
 axes[2].set_yticks([0.33 - 0.12, 0.66 - 0.12, 0.99 - 0.12])
 axes[2].set_yticklabels(['state0', 'state1', 'unknown'])
-
-plt.show()
+if len(sys.argv) > 2:
+    plt.savefig(sys.argv[2])
+else:
+    plt.show()
