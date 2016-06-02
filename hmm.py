@@ -66,13 +66,17 @@ def main(args=None):
 
     import toolshed as ts
     if args is None:
-        if len(sys.argv) > 1:
-            args = sys.argv[1:]
-        else:
-            args = ["-"]
+        if len(sys.argv) == 1:
+            print("usage: %s <x-over-bed> <input>\nif input is not specified, stdin is assumed" % sys.argv[0])
+
+        args = sys.argv[1:]
+    if len(args) == 1:
+        args.append("-")
 
     rows = []
-    for d in ts.reader(args[0], header='ordered'):
+    xfh = ts.nopen(args[0], mode="w")
+    xfh.write("chrom\tstart\tend\tparent\tfamily_id\tstate-change\tinformative-sites\n")
+    for d in ts.reader(args[1], header='ordered'):
         if d['start'] == 'start': continue
         v = int(d['same(1)_diff(2)'])
         rows.append((d['chrom'], int(d['start']), v, d))
@@ -82,12 +86,28 @@ def main(args=None):
         return
     vals = fit([r[2] for r in rows])
 
+    last_start, last_state = None, None
+    n = 0
     for i, row in enumerate((r[-1] for r in rows)):
         if i == 0:
             print("#" + "\t".join(row.keys() + ['hmm-state']))
         print("%s\t%d" % ("\t".join(row.values()), vals[i]))
+        if last_state is None:
+            last_state = vals[i]
+            last_start = row['start']
+        n += 1
 
+        if vals[i] != last_state:
+            d = row.copy()
+            d['start'] = last_start
+            d['end'] = row['start']
 
+            d['state-change'] = "%d-%d" % (last_state, vals[i])
+            d['informative-sites'] = str(n)
+            xfh.write("{chrom}\t{start}\t{end}\t{parent}\t{family_id}\t{state-change}\t{informative-sites}\n".format(**d))
+            last_start = row['start']
+            last_state = vals[i]
+            n = 0
 
 if __name__ == "__main__":
     import doctest
