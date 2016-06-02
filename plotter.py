@@ -11,6 +11,10 @@ axes[0].set_title("raw")
 axes[1].set_title("x-over")
 axes[2].set_title("hmm")
 
+name = sys.argv[1].split("/")[-1].split(".")[0]
+#fig.set_title(name)
+fig.suptitle(name)
+
 try:
     rdr = ts.reader(1)
     row = next(rdr)
