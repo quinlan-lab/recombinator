@@ -1,4 +1,5 @@
 from slurmpy import Slurm
+import os
 
 creds = {"account": "quinlan-kp", "partition": "quinlan-kp"}
 
