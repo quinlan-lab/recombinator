@@ -1,7 +1,6 @@
 from __future__ import print_function
 import numpy as np
 from collections import Counter
-from hmmlearn import hmm
 import pomegranate as po
 import sys
 
@@ -11,7 +10,7 @@ eps = 1e-8
 
 def fit(obs, noise_pct=0.08, eps=eps, pseudocount=500):
     """
-    >>> obs = [0, 1, 0, 1, 0] + [1] * 400
+    >>> obs = [0, 1, 0, 1, 0] + [1] * 40
     >>> res = fit(obs)
     >>> np.all(res == 1)
     True
@@ -87,6 +86,7 @@ def main(args=None):
     vals = fit([r[2] for r in rows])
 
     last_start, last_state = None, None
+    prev_start = None
     n = 0
     for i, row in enumerate((r[-1] for r in rows)):
         if i == 0:
@@ -99,7 +99,7 @@ def main(args=None):
 
         if vals[i] != last_state:
             d = row.copy()
-            d['start'] = last_start
+            d['start'] = prev_start
             d['end'] = row['start']
 
             d['state-change'] = "%d-%d" % (last_state, vals[i])
@@ -108,6 +108,8 @@ def main(args=None):
             last_start = row['start']
             last_state = vals[i]
             n = 0
+
+        prev_start = row['start']
 
 if __name__ == "__main__":
     import doctest
