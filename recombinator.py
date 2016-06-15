@@ -133,6 +133,7 @@ def run(args):
             print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
         if not v.var_type == 'snp':
             continue
+        if v.call_rate < 0.95: continue
 
         # expensive to get gt_bases and we only need it at the crossover.
         gt_bases = None
