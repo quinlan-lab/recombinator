@@ -1,6 +1,8 @@
+if [[ ! -e regions.txt ]]; then
 python ~/Projects/src/freebayes/scripts/fasta_generate_regions.py \
 	/scratch/ucgd/lustre/u0413537/UGP_Pipeline_Data/references/human_g1k_v37_decoy.fasta 1000000 \
 	> regions.txt
+fi
 
 PATH=/scratch/ucgd/lustre/u6000771/gem/tools/bin:/scratch/ucgd/lustre/u6000771/gem/data/anaconda/bin/:$PATH:~u6000771/bin
 
@@ -8,27 +10,31 @@ mkdir -p scripts/
 mkdir -p logs/
 mkdir -p results/
 
+DATE=2016_06_15
+
+mkdir -p results/$DATE/
+
 while read region; do
 	f=${region//:/-}
 	script=scripts/$f.sh
 cat << EOF > $script
 #!/bin/bash
-#SBATCH --account=ucgd-kp
-#SBATCH --partition=ucgd-kp
+#SBATCH --account=quinlan-kp
+#SBATCH --partition=quinlan-kp
 
 #SBATCH --time=84:00:00
 #SBATCH --ntasks=1
 #SBATCH -J $f
 
-#SBATCH -o logs/recombinator-$f.out
-#SBATCH -e logs/recombinator-$f.err
+#SBATCH -o logs/recombinator-$DATE-$f.out
+#SBATCH -e logs/recombinator-$DATE-$f.err
 
 set -eo pipefail -o nounset
 
 python recombinator.py --min-gq 20 --min-depth 20 --region $region \\
 	--vcf ~u6000771/Data/519FamiliesUnrecal_snp-recal_indel-recal.vcf.gz \\
 	--ped ~u6000771/Data/ssc_519.ped \
-	| bgzip -c > results/$f.bed.gz &
+	| bgzip -c > results/$DATE/$f.bed.gz &
 
 EOF
 
@@ -39,7 +45,7 @@ echo "\
 python recombinator.py --min-gq 20 --min-depth 20 --region $region \\
 	--vcf ~u6000771/Data/519FamiliesUnrecal_snp-recal_indel-recal.vcf.gz \\
 	--ped ~u6000771/Data/ssc_519.ped \
-	| bgzip -c > results/$f.bed.gz &
+	| bgzip -c > results/$DATE/$f.bed.gz &
 " >> $script
 done
 
