@@ -19,8 +19,11 @@ export MAP=/uufs/chpc.utah.edu/common/home/u6000771/Projects/src/shapeit/example
 #cut -f 2- /scratch/ucgd/lustre/u6000771/Projects/src/shapeit/example/genetic_map_GRCh37_chr${chrom}.txt > $MAP
 
 export name=chr$chrom.$prefix
-<<DONE
-plink --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf simons.$name.vcf.gz --make-bed --out $name
+
+#plink --chr $chrom --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf simons.$name.vcf.gz --make-bed --out $name
+plink --chr $chrom --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf $VCF --make-bed --out $name
+exit
+
 cut -f 1-6 fam.ped | grep -v ^# > $name.fam
 
 # remove mendelian errors
@@ -42,6 +45,7 @@ shapeit \
 	--output-graph results/duohmm-$name.graph
 set -xo nounset
 
+# correct haplotypes with duohmm
 duohmm \
 	-H results/duohmm-$name \
 	-M $MAP \
@@ -49,8 +53,6 @@ duohmm \
 
 DONE
 
-#seq 1 10 | xargs -P 10 -I{} sh -c  "shapeit -convert --input-graph results/duohmm-$chrom-$prefix.graph --output-sample results/sim$chrom.${prefix}.{} --seed {} && duohmm -H results/sim$chrom.${prefix}.{} -M $MAP -R results/sim$chrom.${prefix}.{}.rec"
-set -x
-seq 1 10 | xargs -P 10 -I{} sh -c  "shapeit -convert --input-haps results/duohmm-$name-corrected --output-haps results/duohmm-$name-haps-{} --output-sample results/sim$name.{} --seed {} && duohmm -H results/duohmm-$name-haps-{} -M $MAP -R results/sim$name.{}.rec"
+seq 1 20 | xargs -P 21 -I{} bash -c  "shapeit -convert --input-haps results/duohmm-$name-corrected --output-haps results/duohmm-$name-haps-{} --output-sample results/sim$name.{} --seed {} && duohmm -H results/duohmm-$name-haps-{} -M $MAP -R results/sim$name.{}.rec"
 
 mapavg.py results/sim${name}.*.rec > duohmm-${name}-recombinations.txt
