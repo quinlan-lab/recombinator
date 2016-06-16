@@ -18,7 +18,8 @@ export MAP=/uufs/chpc.utah.edu/common/home/u6000771/Projects/src/shapeit/example
 # the hapmap ones have an extra column
 #cut -f 2- /scratch/ucgd/lustre/u6000771/Projects/src/shapeit/example/genetic_map_GRCh37_chr${chrom}.txt > $MAP
 
-name=chr$chrom.$prefix
+export name=chr$chrom.$prefix
+<<DONE
 plink --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf simons.$name.vcf.gz --make-bed --out $name
 cut -f 1-6 fam.ped | grep -v ^# > $name.fam
 
@@ -37,16 +38,19 @@ shapeit \
 	-T 1 \
 	-M $MAP \
 	-W 5 \
-	--output-max results/duohmm-$name
+	--output-max results/duohmm-$name \
 	--output-graph results/duohmm-$name.graph
+set -xo nounset
 
 duohmm \
-	-H results/duohmm-$name
+	-H results/duohmm-$name \
 	-M $MAP \
 	-O results/duohmm-$name-corrected
 
+DONE
 
 #seq 1 10 | xargs -P 10 -I{} sh -c  "shapeit -convert --input-graph results/duohmm-$chrom-$prefix.graph --output-sample results/sim$chrom.${prefix}.{} --seed {} && duohmm -H results/sim$chrom.${prefix}.{} -M $MAP -R results/sim$chrom.${prefix}.{}.rec"
-seq 1 10 | xargs -P 10 -I{} sh -c  "shapeit -convert --input-haps results/duohmm-$name-corrected --output-sample results/sim$name.{} --seed {} && duohmm -H results/sim$name.{} -M $MAP -R results/sim$name.{}.rec"
+set -x
+seq 1 10 | xargs -P 10 -I{} sh -c  "shapeit -convert --input-haps results/duohmm-$name-corrected --output-haps results/duohmm-$name-haps-{} --output-sample results/sim$name.{} --seed {} && duohmm -H results/duohmm-$name-haps-{} -M $MAP -R results/sim$name.{}.rec"
 
 mapavg.py results/sim${name}.*.rec > duohmm-${name}-recombinations.txt
