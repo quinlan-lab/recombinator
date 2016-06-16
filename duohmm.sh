@@ -1,6 +1,6 @@
 VCF=~u6000771/Data/519FamiliesUnrecal_snp-recal_indel-recal.vcf.gz
 prefix=4fams
-PED=~u6000771/Data/ssc_519.ped
+PED=~u6000771/Data/ssc_519.ordered.ped
 export VCF
 export prefix
 
@@ -22,9 +22,8 @@ export name=chr$chrom.$prefix
 
 #plink --chr $chrom --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf simons.$name.vcf.gz --make-bed --out $name
 plink --chr $chrom --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf $VCF --make-bed --out $name
-exit
 
-cut -f 1-6 fam.ped | grep -v ^# > $name.fam
+cut -f 1-6 $PED | grep -v ^# > $name.fam
 
 # remove mendelian errors
 plink --noweb \
@@ -43,15 +42,12 @@ shapeit \
 	-W 5 \
 	--output-max results/duohmm-$name \
 	--output-graph results/duohmm-$name.graph
-set -xo nounset
 
 # correct haplotypes with duohmm
 duohmm \
 	-H results/duohmm-$name \
 	-M $MAP \
 	-O results/duohmm-$name-corrected
-
-DONE
 
 seq 1 20 | xargs -P 21 -I{} bash -c  "shapeit -convert --input-haps results/duohmm-$name-corrected --output-haps results/duohmm-$name-haps-{} --output-sample results/sim$name.{} --seed {} && duohmm -H results/duohmm-$name-haps-{} -M $MAP -R results/sim$name.{}.rec"
 
