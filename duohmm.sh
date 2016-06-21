@@ -38,17 +38,17 @@ plink --noweb \
      --make-bed \
      --out $name-nomendel
 
-DONE
 
 # phase without using ped info.
 shapeit \
 	--noped \
 	-B $name-nomendel \
-	-T 1 \
+	-T 13 \
 	-M $MAP \
 	-W 5 \
-	--output-max results/duohmm-$name \
-	--output-graph results/duohmm-$name.graph
+	--output-max results-t/duohmm-$name \
+	--output-graph results-t/duohmm-$name.graph
+DONE
 
 # correct haplotypes with duohmm
 #duohmm \
@@ -56,6 +56,6 @@ shapeit \
 #	-M $MAP \
 #	-O results/duohmm-$name-corrected
 
-seq 1 20 | xargs -P 21 -I{} bash -c  "shapeit -convert --input-graph results/duohmm-$name.graph --output-sample results/sim$name.{} --seed {} && duohmm -H results/sim-$name-{} -M $MAP -R results/sim$name.{}.rec"
+seq 1 20 | xargs -P 21 -I{} bash -c  "shapeit -convert --input-graph results-t/duohmm-$name.graph --output-sample results-t/sim$name.{} --seed {} && duohmm -H results-t/sim$name.{} -M $MAP -R results-t/sim$name.{}.rec"
 
-mapavg.py results/sim${name}.*.rec > duohmm-${name}-recombinations.txt
+mapavg.py results-t/sim${name}.*.rec > duohmm-t-${name}-recombinations.txt
