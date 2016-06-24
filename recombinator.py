@@ -2,10 +2,12 @@ import argparse
 import sys
 import re
 import itertools as it
-import numpy as np
+import gzip
 from collections import defaultdict
-from cyvcf2 import VCF
 from operator import itemgetter, attrgetter
+
+import numpy as np
+from cyvcf2 import VCF
 
 from peddy import Ped
 
@@ -20,11 +22,12 @@ def main():
     p.add_argument("--ped", required=True)
     p.add_argument("--vcf", required=True)
     p.add_argument("--region", help="optional VCF region e.g. '1:1-1000000'")
+    p.add_argument("--prefix", required=True, help="prefix for output. files will be prefix.{region}.{family}.{parent}.bed.gz")
     args = p.parse_args()
     run(args)
 
 
-def get_family_dict(fam, smp2idx):
+def get_family_dict(fam, smp2idx, args):
     """
     Hack to just get the VCF idxs for the dad, mom and kids
     """
@@ -52,6 +55,11 @@ def get_family_dict(fam, smp2idx):
     if not f:
         return False
 
+    region = (args.region or "").replace(":", "-")
+    f['fh-dad'] = gzip.open("%s.%s.%s.dad.bed.gz" % (args.prefix, region, sample.family_id), "w")
+    f['fh-mom'] = gzip.open("%s.%s.%s.mom.bed.gz" % (args.prefix, region, sample.family_id), "w")
+    f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+    f['fh-mom'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
     # much faster to index with an array.
     f['idxs'] = np.array([f[s]['idx'] for s in ('dad', 'mom', 'template', 'sib')])
     f['family_id'] = sample.family_id
@@ -122,11 +130,9 @@ def run(args):
         sys.exit('Families %s not found in ped file' % args.families)
 
     # create a simple dictionary of info for each family member
-    fs = [get_family_dict(fam, smp2idx) for fam in fams]
+    fs = [get_family_dict(fam, smp2idx, args) for fam in fams]
 
     # header
-    print '\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same',
-                     'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90'])
     for i, v in enumerate(vcf_iter, start=1):
         if i % 50000 == 0:
             print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
@@ -163,10 +169,9 @@ def run(args):
                             np.percentile(v.gt_depths, (1, 10, 50, 90)))
 
                     val = 1 if f['gt_type'][2] == f['gt_type'][3] else 0
-                    print '\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
+                    f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                             parent, f['family_id'], val, fam_bases, "%.2f" %
-                            v.call_rate, pctiles])
-                    sys.stdout.flush()
+                            v.call_rate, pctiles]) + '\n')
 
 if __name__ == "__main__":
     main()
