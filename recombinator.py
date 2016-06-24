@@ -52,8 +52,8 @@ def get_family_dict(fam, smp2idx):
     if not f:
         return False
 
-    # must faster to index with an array.
-    f['idxs'] = np.array([f[s]['idx'] for s in ('dad', 'mom', 'sib', 'template')])
+    # much faster to index with an array.
+    f['idxs'] = np.array([f[s]['idx'] for s in ('dad', 'mom', 'template', 'sib')])
     f['family_id'] = sample.family_id
     return f
 
@@ -63,11 +63,11 @@ def add_genotype_info(fam, gt_types=None,
     Assign the genotype info to each member in the family
     """
     if not gt_types is None:
-        fam['gt_type'] = gt_types[fam['idxs']]
+        fam['gt_type'] = np.array(gt_types[fam['idxs']])
     if not gt_depths is None:
-        fam['gt_depth'] = gt_depths[fam['idxs']]
+        fam['gt_depth'] = np.array(gt_depths[fam['idxs']])
     if not gt_quals is None:
-        fam['gt_qual'] = gt_quals[fam['idxs']]
+        fam['gt_qual'] = np.array(gt_quals[fam['idxs']])
 
 def impose_quality_control(fam, args):
     """
@@ -88,9 +88,8 @@ def impose_quality_control(fam, args):
 
 def is_informative(fam):
     """
-    Is the site informative in the sense that
-    to be useful for catching recombination,
-    one parent must be HET and the other HOM
+    Is the site informative in the sense that to be useful for catching recombination,
+    one parent must be HET and the other HOM.
     """
     gt_types = fam['gt_type']  # order is dad, then mom
     return (gt_types[1] == HOM_REF and gt_types[0] == HET) or \
@@ -126,21 +125,20 @@ def run(args):
     fs = [get_family_dict(fam, smp2idx) for fam in fams]
 
     # header
-    print '\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same(1)_diff(2)',
+    print '\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same',
                      'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90'])
     for i, v in enumerate(vcf_iter, start=1):
         if i % 50000 == 0:
             print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
-        if not v.var_type == 'snp':
+        if v.var_type != 'snp':
             continue
         if v.call_rate < 0.95: continue
 
         # expensive to get gt_bases and we only need it at the crossover.
         gt_bases = None
         gt_types, gt_quals, gt_depths = v.gt_types, v.gt_quals, v.gt_depths
+
         for f in fs:
-
-
             # embellish f with the genotype info for each family member.
             # is_informative only needs gt_types, so we check that first...
             add_genotype_info(f, gt_types=gt_types)
@@ -164,7 +162,7 @@ def run(args):
                     pctiles = "|".join("%.0f" % v for v in
                             np.percentile(v.gt_depths, (1, 10, 50, 90)))
 
-                    val = 1 if f['gt_type'][2] == f['gt_type'][3] else 2
+                    val = 1 if f['gt_type'][2] == f['gt_type'][3] else 0
                     print '\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                             parent, f['family_id'], val, fam_bases, "%.2f" %
                             v.call_rate, pctiles])
