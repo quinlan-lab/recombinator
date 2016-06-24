@@ -10,7 +10,7 @@ mkdir -p scripts/
 mkdir -p logs/
 mkdir -p results/
 
-DATE=2016_06_15
+DATE=2016_06_24
 
 mkdir -p results/$DATE/
 
@@ -34,7 +34,7 @@ set -eo pipefail -o nounset
 python recombinator.py --min-gq 20 --min-depth 20 --region $region \\
 	--vcf ~u6000771/Data/519FamiliesUnrecal_snp-recal_indel-recal.vcf.gz \\
 	--ped ~u6000771/Data/ssc_519.ped \
-	| bgzip -c > results/$DATE/$f.bed.gz &
+	--prefix results/$DATE/recomb &
 
 EOF
 
@@ -45,7 +45,7 @@ echo "\
 python recombinator.py --min-gq 20 --min-depth 20 --region $region \\
 	--vcf ~u6000771/Data/519FamiliesUnrecal_snp-recal_indel-recal.vcf.gz \\
 	--ped ~u6000771/Data/ssc_519.ped \
-	| bgzip -c > results/$DATE/$f.bed.gz &
+	--prefix  results/$DATE/recomb &
 " >> $script
 done
 
