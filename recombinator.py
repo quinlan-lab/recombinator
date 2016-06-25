@@ -1,5 +1,6 @@
 import argparse
 import sys
+import os
 import re
 import itertools as it
 import gzip
@@ -55,9 +56,10 @@ def get_family_dict(fam, smp2idx, args):
     if not f:
         return False
 
-    region = (args.region or "").replace(":", "-")
-    f['fh-dad'] = gzip.open("%s.%s.%s.dad.bed.gz" % (args.prefix, region, sample.family_id), "w")
-    f['fh-mom'] = gzip.open("%s.%s.%s.mom.bed.gz" % (args.prefix, region, sample.family_id), "w")
+    region = (args.region or "all").replace(":", "-")
+    os.makedirs("%s/fam%s" % (args.prefix, sample.family_id))
+    f['fh-dad'] = gzip.open("%s/fam%s/%s.dad.bed.gz" % (args.prefix, sample.family_id, region), "w")
+    f['fh-mom'] = gzip.open("%s/fam%s/%s.mom.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
     f['fh-mom'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
     # much faster to index with an array.
