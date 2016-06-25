@@ -10,13 +10,13 @@ mkdir -p scripts/
 mkdir -p logs/
 mkdir -p results/
 
-DATE=2016_06_24
+DATE=2016_06_25
 
 mkdir -p results/$DATE/
 
 while read region; do
 	f=${region//:/-}
-	script=scripts/$f.sh
+	script=scripts/recombinator-$f.sh
 cat << EOF > $script
 #!/bin/bash
 #SBATCH --account=quinlan-kp

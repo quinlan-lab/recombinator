@@ -8,29 +8,31 @@ fams = set([x.split()[0] for i, x in
         if i > 0])
 
 base = "/uufs/chpc.utah.edu/common/home/u1007787/Projects/recombination/results/"
+base = "/scratch/ucgd/lustre/u6000771/Projects/src/recombinator/results/2016_06_25/"
+
 pre = """
 set +e
 set +o pipefail
 set -o nounset
 PATH=/scratch/ucgd/lustre/u6000771/gem/tools/bin:/scratch/ucgd/lustre/u6000771/gem/data/anaconda/bin/:$PATH:~u6000771/bin
 BASE={base}
+mkdir -p $BASE/hmm/
+mkdir -p $BASE/combined/
+mkdir -p $BASE/crossovers/
 """.format(base=base)
 
 tmpl = """
-IN=$BASE/split/chr{chrom}-fam{fam}-{parent}.bed.gz
-if [[ ! -f $IN ]]; then
-(zcat $BASE/{chrom}-0-1000000.bed.gz| head -1; (zgrep -hw {fam} $BASE/{chrom}-*.bed.gz | grep -w {parent})) \\
-        | bgzip -c > $IN
-fi
 
-zcat $IN \\
-        | python hmm.py $BASE/crossovers/chr{chrom}-fam{fam}-{parent}.bed  \\
+# writes .bed and .filtered.bed for crossovers.
+zcat $BASE/recomb/fam{fam}/{chrom}-*.{parent}.bed.gz \\
+        | python hmm.py $BASE/crossovers/chr{chrom}-fam{fam}-{parent}  \\
         | bgzip -c > $BASE/hmm/chr{chrom}-fam{fam}-{parent}.hmm.bed.gz &
 
 """
 
 plot_tmpl = """
 python plotter.py $BASE/hmm/chr{chrom}-fam{fam}-{parent}.hmm.bed.gz \\
+        $BASE/crossovers/chr{chrom}-fam{fam}-{parent}.filtered.bed \\
         $BASE/hmm/chr{chrom}-fam{fam}-{parent}.hmm.png &
 """
 
