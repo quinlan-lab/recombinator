@@ -57,7 +57,11 @@ def get_family_dict(fam, smp2idx, args):
         return False
 
     region = (args.region or "all").replace(":", "-")
-    os.makedirs("%s/fam%s" % (args.prefix, sample.family_id))
+    try:
+        os.makedirs("%s/fam%s" % (args.prefix, sample.family_id))
+    except OSError:
+        if not os.path.exists("%s/fam%s" % (args.prefix, sample.family_id)):
+            raise
     f['fh-dad'] = gzip.open("%s/fam%s/%s.dad.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-mom'] = gzip.open("%s/fam%s/%s.mom.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
