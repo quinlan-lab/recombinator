@@ -66,16 +66,28 @@ def get_family_dict(fam, smp2idx, args):
     f['fh-mom'] = gzip.open("%s/fam%s/%s.mom.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
     f['fh-mom'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+
+    f['ids'] = [f[s]['id'] for s in ('dad', 'mom', 'template', 'sib')]
+
+    for p in ('dad', 'mom'):
+        for kid in f['ids'][2:]:
+            f['fh-%s-%s' % (p, kid)] = gzip.open("%s/fam%s/%s.%s-%s.bed.gz" % (args.prefix, sample.family_id, region, p, kid), "w")
+            f['fh-%s-%s' % (p, kid)].write('\t'.join(['chrom', 'start', 'end',
+                'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2',
+                'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+
     # much faster to index with an array.
     f['idxs'] = np.array([f[s]['idx'] for s in ('dad', 'mom', 'template', 'sib')])
     f['family_id'] = sample.family_id
     return f
 
 def add_genotype_info(fam, gt_types=None,
-        gt_depths=None, gt_quals=None):
+        gt_depths=None, gt_quals=None, gt_phases=None):
     """
     Assign the genotype info to each member in the family
     """
+    if not gt_phases is None:
+        fam['gt_phase'] = gt_phases
     if not gt_types is None:
         fam['gt_type'] = np.array(gt_types[fam['idxs']])
     if not gt_depths is None:
@@ -137,6 +149,7 @@ def run(args):
 
     # create a simple dictionary of info for each family member
     fs = [get_family_dict(fam, smp2idx, args) for fam in fams]
+    del fam
 
     # header
     for i, v in enumerate(vcf_iter, start=1):
@@ -149,12 +162,20 @@ def run(args):
         # expensive to get gt_bases and we only need it at the crossover.
         gt_bases = None
         gt_types, gt_quals, gt_depths = v.gt_types, v.gt_quals, v.gt_depths
+        gt_phases = v.gt_phases
 
         for f in fs:
             # embellish f with the genotype info for each family member.
             # is_informative only needs gt_types, so we check that first...
-            add_genotype_info(f, gt_types=gt_types)
+            add_genotype_info(f, gt_types=gt_types, gt_phases=gt_phases)
             # sanity and quality checks
+            if np.all(f['gt_phase']):
+                if gt_bases is None:
+                    gt_bases = v.gt_bases
+
+                phased_check(f, v, gt_bases)
+                continue
+
             if not is_informative(f):
                 continue
 
@@ -178,6 +199,32 @@ def run(args):
                     f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                             parent, f['family_id'], val, fam_bases, "%.2f" %
                             v.call_rate, pctiles]) + '\n')
+
+
+def phased_check(fam, v, gt_bases):
+    for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
+        if fam['gt_type'][p1] != HET: continue
+        # TODO: add impose_quality_control here.
+
+        fam_bases = [x.split("|") for x in gt_bases[fam['idxs']]]
+        #pctiles = "|".join("%.0f" % v for v in
+        #        np.percentile(v.gt_depths, (1, 10, 50, 90)))
+        pctiles = "|"
+        vbases = "\t".join(gt_bases[fam['idxs']])
+        for kid in (2, 3):
+
+            #val = int(fam_bases[kid][p2] == fam_bases[p1][0])
+            # seems like dad is first allele.
+            val = int(fam_bases[kid][p1] == fam_bases[p1][0])
+
+            kid_id = fam['ids'][kid]
+            fam['fh-%s-%s' % (parent, kid_id)].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
+                    parent + "--" + str(kid - 1), fam['family_id'], val, vbases, "%.2f" %
+                    v.call_rate, pctiles]) + '\n')
+            fam['fh-%s-%s' % (parent, kid_id)].flush()
+
+
+
 
 if __name__ == "__main__":
     main()
