@@ -204,6 +204,16 @@ def run(args):
                             parent, f['family_id'], val, fam_bases, "%.2f" %
                             v.call_rate, pctiles]) + '\n')
 
+    # remove empty files.
+    for f in fs:
+        for v in f.values():
+            if hasattr(v, "flush"):
+                v.flush()
+                v.close()
+                for i, line in enumerate(gzip.open(v.name)):
+                    if i == 2: break
+                else:
+                    os.unlink(v.name)
 
 def phased_check(fam, v, gt_bases):
     """
