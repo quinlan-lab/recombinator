@@ -206,15 +206,15 @@ def run(args):
 
 
 def phased_check(fam, v, gt_bases):
+    """
+    take cases where only 1 parent is HET or where 1 parent is HOM_REF and the
+    other is HOM_ALT
+    """
 
-    # TODO: check if mom == HOM_REF and dad == HET.
-
-    pair = tuple(sorted(fam['gt_type'][:2]))
-    if pair == (0, 2):
-        print gt_bases
+    hom_pair = tuple(sorted((fam['gt_type'][:2]))) == (HOM_REF, HOM_ALT)
 
     for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
-        if fam['gt_type'][p1] != HET: continue
+        if not hom_pair and fam['gt_type'][p1] != HET: continue
         # TODO: add impose_quality_control here.
 
         fam_bases = [x.split("|") for x in gt_bases[fam['idxs']]]
