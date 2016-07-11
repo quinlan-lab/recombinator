@@ -25,6 +25,9 @@ def main():
     p.add_argument("--region", help="optional VCF region e.g. '1:1-1000000'")
     p.add_argument("--prefix", required=True, help="prefix for output. files will be prefix.{region}.{family}.{parent}.bed.gz")
     args = p.parse_args()
+
+    if args.region:
+        args.prefix = os.path.join(args.prefix, args.region.split(":")[0])
     run(args)
 
 
@@ -169,6 +172,7 @@ def run(args):
             # is_informative only needs gt_types, so we check that first...
             add_genotype_info(f, gt_types=gt_types, gt_phases=gt_phases)
             # sanity and quality checks
+
             if np.all(f['gt_phase']):
                 if gt_bases is None:
                     gt_bases = v.gt_bases
@@ -202,6 +206,13 @@ def run(args):
 
 
 def phased_check(fam, v, gt_bases):
+
+    # TODO: check if mom == HOM_REF and dad == HET.
+
+    pair = tuple(sorted(fam['gt_type'][:2]))
+    if pair == (0, 2):
+        print gt_bases
+
     for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
         if fam['gt_type'][p1] != HET: continue
         # TODO: add impose_quality_control here.
@@ -213,13 +224,12 @@ def phased_check(fam, v, gt_bases):
         vbases = "\t".join(gt_bases[fam['idxs']])
         for kid in (2, 3):
 
-            val = int(fam_bases[kid][p2] == fam_bases[p1][0])
-            # seems like dad is first allele.
-            #val = int(fam_bases[kid][p1] == fam_bases[p1][0])
+
+            same = int(fam_bases[kid][p1] == fam_bases[p1][0])
 
             kid_id = fam['ids'][kid]
             fam['fh-%s-%s' % (parent, kid_id)].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
-                    parent + "--" + str(kid - 1), fam['family_id'], val, vbases, "%.2f" %
+                    parent + "--" + str(kid - 1), fam['family_id'], same, vbases, "%.2f" %
                     v.call_rate, pctiles]) + '\n')
             fam['fh-%s-%s' % (parent, kid_id)].flush()
 
