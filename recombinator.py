@@ -213,9 +213,9 @@ def phased_check(fam, v, gt_bases):
         vbases = "\t".join(gt_bases[fam['idxs']])
         for kid in (2, 3):
 
-            #val = int(fam_bases[kid][p2] == fam_bases[p1][0])
+            val = int(fam_bases[kid][p2] == fam_bases[p1][0])
             # seems like dad is first allele.
-            val = int(fam_bases[kid][p1] == fam_bases[p1][0])
+            #val = int(fam_bases[kid][p1] == fam_bases[p1][0])
 
             kid_id = fam['ids'][kid]
             fam['fh-%s-%s' % (parent, kid_id)].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,

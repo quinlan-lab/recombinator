@@ -1,17 +1,16 @@
 if [[ ! -e regions.txt ]]; then
 python ~/Projects/src/freebayes/scripts/fasta_generate_regions.py \
-	/scratch/ucgd/lustre/u0413537/UGP_Pipeline_Data/references/human_g1k_v37_decoy.fasta 1000000 \
+	/scratch/ucgd/lustre/u0413537/UGP_Pipeline_Data/references/human_g1k_v37_decoy.fasta 4000000 \
 	> regions.txt
 fi
 
 PATH=/scratch/ucgd/lustre/u6000771/gem/tools/bin:/scratch/ucgd/lustre/u6000771/gem/data/anaconda/bin/:$PATH:~u6000771/bin
+VCF=results/chr22.simons/chr22.simons.phased.vcf.gz
+PED=~u6000771/Data/ssc_519.ped
+DATE=2016_07_09
 
 mkdir -p scripts/
 mkdir -p logs/
-mkdir -p results/
-
-DATE=2016_06_25
-
 mkdir -p results/$DATE/
 
 while read region; do
@@ -32,8 +31,8 @@ cat << EOF > $script
 set -eo pipefail -o nounset
 
 python recombinator.py --min-gq 20 --min-depth 20 --region $region \\
-	--vcf ~u6000771/Data/519FamiliesUnrecal_snp-recal_indel-recal.vcf.gz \\
-	--ped ~u6000771/Data/ssc_519.ped \
+	--vcf $VCF \\
+	--ped $PED \
 	--prefix results/$DATE/recomb &
 
 EOF
@@ -43,8 +42,8 @@ for i in $(seq 1 23); do
 	f=${region//:/-}
 echo "\
 python recombinator.py --min-gq 20 --min-depth 20 --region $region \\
-	--vcf ~u6000771/Data/519FamiliesUnrecal_snp-recal_indel-recal.vcf.gz \\
-	--ped ~u6000771/Data/ssc_519.ped \
+	--vcf $VCF \\
+	--ped $PED \
 	--prefix  results/$DATE/recomb &
 " >> $script
 done
