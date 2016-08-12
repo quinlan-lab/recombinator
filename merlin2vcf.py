@@ -2,14 +2,15 @@ import itertools as it
 
 def tryint(f):
     try:
-        return str(int(f) - 1)
-    except:
+        v = str(int(f) - 1)
+    except ValueError:
         if "?" == f:
-            return "?"
-        if "," in f:
-            return "HET"
+            v = "."
+        elif "," in f:
+            v = "."
         else:
             raise
+    return v
 
 def _get_fam(fh):
     try:
@@ -23,7 +24,7 @@ def _get_fam(fh):
         line = line.split()
         line[1] = line[0]
         line = line[1:]
-        line[3:] = map(tryint, line[3:])
+        line[1:] = map(tryint, line[1:])
         samples.append(line)
         line = next(fh).rstrip()
     return fam, samples
@@ -36,6 +37,7 @@ def _read_map(f):
 def merlin2vcf(fh, fmap):
     L = []
     fam, samps = _get_fam(fh)
+    L.extend(samps)
     while fam:
         L.extend(samps)
         fam, samps = _get_fam(fh)
@@ -47,6 +49,7 @@ def merlin2vcf(fh, fmap):
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	{samples}""".format(samples=samples)
     # start at 1 to skip the sample.
     for i, p in enumerate(pmap, start=1):
+        if i >= len(L[0]): break
         try:
             gts = [L[k][i] + "|" + L[k+1][i] for k in range(0, len(L), 2)]
         except:

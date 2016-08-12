@@ -22,8 +22,11 @@ export MAP=/uufs/chpc.utah.edu/common/home/u6000771/Projects/src/shapeit/example
 
 export name=chr${chrom}.${prefix}
 vcf=data/$prefix.chr${chrom}.vcf.gz
-#vcf=illumina-sites.chr${chrom}.vcf.gz
+vcf=illumina-sites.chr${chrom}.vcf.gz
+vcf=illumina-sites.chr${chrom}.c100.vcf.gz
 
+
+# NOTE: add bcftools view -c 100 to force a higher AF
 #(bcftools view -h $VCF;
 #zgrep chr22 illumina-1M-duo.bed.gz \
 #	| sort -k2,2n \
@@ -34,35 +37,34 @@ vcf=data/$prefix.chr${chrom}.vcf.gz
 #	| awk 'BEGIN{x=0;} $0 ~/^#/{ if(x==0) {print;} next}{x=1; print $0 | "LC_ALL=C sort -u --compress-program gzip --buffer-size 1G -k1,1 -k2,2n"}'
 #	) | bcftools view -m2 -M2 -c1 | bgzip -c > $vcf
 
-<<DONE
-plink --real-ref-alleles --chr $chrom --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf $vcf --make-bed --out $name
+D=results/2016_08_12-shapeit-sites/
+mkdir -p $D
 
-cut -f 1-6 $PED | grep -v ^# > ${name}.fam
+plink --real-ref-alleles --chr $chrom --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf $vcf --make-bed --out $D/$name
+
+cut -f 1-6 $PED | grep -v ^# > $D/${name}.fam
 
 rm -f $name-nomendel*
 # remove mendelian errors
 plink \
  --real-ref-alleles \
- --bfile $name \
+ --bfile $D/$name \
  --me 1 1 \
  --set-me-missing \
  --make-bed \
- --out $name-nomendel
+ --out $D/$name-nomendel
 
-DONE
 
-mkdir -p results/$name/
-rm -f results/$name/*
-mkdir -p results/$name/
-# phase without using ped info.
 
 shapeit \
-	--aligned \
 	--duohmm \
-	-B $name-nomendel \
+	-B $D/$name-nomendel \
 	-T 35 \
 	-M $MAP \
-	-W 0.5 \
-	-O results/$name/duohmm-$name
+	-W 0.3 \
+	-O $D/duohmm-$name
 
-shapeit -convert --aligned --input-haps results/$name/duohmm-$name --output-vcf results/$name/$name.phased.vcf
+shapeit -convert --input-haps $D/duohmm-$name --output-vcf $D/$name.phased.vcf
+
+bgzip $D/$name.phased.vcf
+tabix $D/$name.phased.vcf.gz

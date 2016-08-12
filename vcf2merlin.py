@@ -46,7 +46,7 @@ def run(args):
 
     # yes, '0 0' is missing
     #l = np.array(["1/ 1\n", "1/ 2\n", "2/ 2\n", "0/ 0\n"])
-    l = np.array(["1  1", "1  2", "2 2", "0 0"])
+    l = np.array(["1/ 1", "1/ 2", "2/ 2", "0/ 0"])
     #l = np.array(["0/ 0\n", "0/ 1\n", "1/ 1\n", "x x\n"])
     #l = np.array(["A A\n", "A C\n", "C C\n", "x x\n"])
 
