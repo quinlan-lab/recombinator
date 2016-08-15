@@ -4,7 +4,9 @@ import os
 
 creds = {"account": "quinlan-kp", "partition": "quinlan-kp"}
 PED = "/uufs/chpc.utah.edu/common/home/u6000771/Data/ssc_519.ped"
-DATE = "2016_07_09"
+DATE = "2016_07_21"
+DATE = "2016_08_12-shapeit-sites"
+DATE = "2016_08_12-shapeit-filtered"
 
 fams = set([x.split()[0] for i, x in enumerate(open(PED)) if i > 0])
 
@@ -24,6 +26,7 @@ set +o pipefail
 set -o nounset
 PATH=/scratch/ucgd/lustre/u6000771/gem/tools/bin:/scratch/ucgd/lustre/u6000771/gem/data/anaconda/bin/:$PATH:~u6000771/bin
 BASE={base}
+
 mkdir -p $BASE/hmm/
 mkdir -p $BASE/combined/
 mkdir -p $BASE/crossovers/
@@ -32,7 +35,7 @@ mkdir -p $BASE/crossovers/
 tmpl = """
 
 # writes .bed and .filtered.bed for crossovers.
-zcat $BASE/recomb/fam{fam}/{chrom}-*.{parent}-{kid}.bed.gz \\
+zcat $BASE/recomb/{chrom}/fam{fam}/{chrom}-*.{parent}-{kid}.bed.gz \\
         | python hmm.py $BASE/crossovers/chr{chrom}-fam{fam}-{parent}-{kid}  \\
         | bgzip -c > $BASE/hmm/chr{chrom}-fam{fam}-{parent}-{kid}.hmm.bed.gz &
 
@@ -61,6 +64,7 @@ for fam in fams:
 
                 png = "{base}/hmm/chr{chrom}-fam{fam}-{parent}-{kid}.hmm.png".format(**locals())
                 if os.path.exists(png):
+                    print(png)
                     continue
 
                 jobs.append(tmpl.format(**locals()))

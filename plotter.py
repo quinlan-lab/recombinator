@@ -2,10 +2,17 @@ import matplotlib
 import os
 import sys
 matplotlib.use('Agg')
+import numpy as np
 
 import seaborn as sns
 import matplotlib.pyplot as plt
 import toolshed as ts
+
+
+# http://stackoverflow.com/questions/13728392/moving-average-or-running-mean
+def running_mean(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0)).astype(float)
+    return (cumsum[N:] - cumsum[:-N]) / N
 
 fig, axes = plt.subplots(3, sharex=True, figsize=(12, 4))
 axes[0].set_title("raw")
@@ -47,6 +54,19 @@ for row in rdr:
     last_h = h
 
 axes[0].plot(xs, ys, 'k.')
+
+
+N = 40
+ym = running_mean(ys, N)
+# so we can see the line.
+ym[ym == 1] = 0.98
+ym[ym == 0] = 0.02
+print(len(xs), len(ym))
+
+axes[0].plot(xs[N-1:], ym, 'k--')
+
+
+
 axes[0].set_ylabel('state')
 axes[0].set_yticks([0, 0.5])
 axes[0].set_yticklabels(['state0', 'state1'])

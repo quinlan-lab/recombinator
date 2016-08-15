@@ -25,6 +25,12 @@ vcf=data/$prefix.chr${chrom}.vcf.gz
 vcf=illumina-sites.chr${chrom}.vcf.gz
 vcf=illumina-sites.chr${chrom}.c100.vcf.gz
 
+bcftools view -f .,PASS -m2 \
+	-e '(AVG(FMT/DP)<20||AVG(FMT/DP)>400||AVG(FMT/GQ)<20) | MAF[0] < 0.02 | QUAL < 20' \
+	data/$prefix.chr${chrom}.vcf.gz -O z -o data/$prefix.chr${chrom}.filter.vcf.gz
+
+vcf=data/$prefix.chr${chrom}.filter.vcf.gz
+
 
 # NOTE: add bcftools view -c 100 to force a higher AF
 #(bcftools view -h $VCF;
@@ -37,7 +43,7 @@ vcf=illumina-sites.chr${chrom}.c100.vcf.gz
 #	| awk 'BEGIN{x=0;} $0 ~/^#/{ if(x==0) {print;} next}{x=1; print $0 | "LC_ALL=C sort -u --compress-program gzip --buffer-size 1G -k1,1 -k2,2n"}'
 #	) | bcftools view -m2 -M2 -c1 | bgzip -c > $vcf
 
-D=results/2016_08_12-shapeit-sites/
+D=results/2016_08_12-shapeit-filtered/
 mkdir -p $D
 
 plink --real-ref-alleles --chr $chrom --geno 0.05 --mind 0.05 --vcf-half-call m --biallelic-only --vcf $vcf --make-bed --out $D/$name
@@ -66,5 +72,5 @@ shapeit \
 
 shapeit -convert --input-haps $D/duohmm-$name --output-vcf $D/$name.phased.vcf
 
-bgzip $D/$name.phased.vcf
+bgzip -f $D/$name.phased.vcf
 tabix $D/$name.phased.vcf.gz

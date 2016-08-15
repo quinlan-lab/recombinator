@@ -1,17 +1,19 @@
 from __future__ import print_function
-import numpy as np
+import sys
+import os
 import itertools as it
 from operator import itemgetter
-import toolshed as ts
 from collections import Counter
+
+import numpy as np
+import toolshed as ts
 import pomegranate as po
-import sys
 
 np.random.seed(42)
 
 eps = 1e-12
 
-def fit(obs, noise_pct=0.04, eps=eps, pseudocount=5):
+def fit(obs, noise_pct=0.08, eps=eps, pseudocount=0):
     """
     >>> obs = [0, 1, 0, 1, 0] + [1] * 40
     >>> res = fit(obs)
@@ -35,11 +37,11 @@ def fit(obs, noise_pct=0.04, eps=eps, pseudocount=5):
 
     i0 = po.State(di0, name="0")
     i1 = po.State(di1, name="1")
-    #inoise = po.State(dnoise, name="2")
+    #  inoise = po.State(dnoise, name="2")
 
     model.add_states([i0, i1])
 
-    m = np.mean(obs[:1000])
+    m = np.mean(obs[:50])
 
     model.add_transition(model.start, i0, m)
     model.add_transition(model.start, i1, 1 - m)
@@ -92,7 +94,6 @@ def main(args=None):
     prev_start = None
     n = 0
 
-
     state_vals = []
     for i, row in enumerate((r[-1] for r in rows)):
         if i == 0:
@@ -102,7 +103,6 @@ def main(args=None):
             last_state = vals[i]
             last_start = row['start']
         n += 1
-
 
         if vals[i] != last_state:
             d = row.copy()
@@ -124,7 +124,7 @@ def main(args=None):
     xo_filter(xfh.name, xfh.name.rsplit(".", 1)[0] + ".filtered.bed")
 
 
-def xo_filter(iname, oname, delta=0.05, min_informative_sites=400):
+def xo_filter(iname, oname, delta=0.05, min_informative_sites=200):
     """
     filter x-overs to minimum informative sites and purity (delta).
     merges info for x-os that were previously separated by a spurios x-o
@@ -133,7 +133,10 @@ def xo_filter(iname, oname, delta=0.05, min_informative_sites=400):
     last = None
     vals = [x for x in list(ts.reader(iname, header="ordered")) if
             int(x['informative-sites']) > min_informative_sites and (float(x['mean_val']) < delta or float(x['mean_val']) > 1 - delta)]
-    if len(vals) == 0: return
+    if len(vals) == 0:
+        if os.path.exists(oname):
+            os.unlink(oname)
+        return
 
     ofh = ts.nopen(oname, "w")
     ofh.write("\t".join(vals[0].keys()) + "\n")
