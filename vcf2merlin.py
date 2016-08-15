@@ -59,7 +59,7 @@ def run(args):
         if len(v.ALT) > 1: continue
 
         k += 1
-        if k == 60000:
+        if k == 1600000:
             break
         marker = "%s_%d" % (v.CHROM, v.start + 1)
         if k % 10000 == 0:
