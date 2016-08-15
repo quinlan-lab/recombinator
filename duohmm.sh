@@ -23,13 +23,12 @@ export MAP=/uufs/chpc.utah.edu/common/home/u6000771/Projects/src/shapeit/example
 export name=chr${chrom}.${prefix}
 vcf=data/$prefix.chr${chrom}.vcf.gz
 vcf=illumina-sites.chr${chrom}.vcf.gz
-vcf=illumina-sites.chr${chrom}.c100.vcf.gz
+vcf=data/$prefix.chr${chrom}.filter.vcf.gz
 
 bcftools view -f .,PASS -m2 \
-	-e '(AVG(FMT/DP)<20||AVG(FMT/DP)>400||AVG(FMT/GQ)<20) | MAF[0] < 0.02 | QUAL < 20' \
-	data/$prefix.chr${chrom}.vcf.gz -O z -o data/$prefix.chr${chrom}.filter.vcf.gz
+	-e 'AVG(FMT/DP)<20 | AVG(FMT/DP)>400 | AVG(FMT/GQ)<20 | MAF[0] < 0.03 | QUAL < 20 | TYPE != "snp"' \
+	data/$prefix.chr${chrom}.vcf.gz -O z -o $vcf
 
-vcf=data/$prefix.chr${chrom}.filter.vcf.gz
 
 
 # NOTE: add bcftools view -c 100 to force a higher AF
