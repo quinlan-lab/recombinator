@@ -23,6 +23,7 @@ def fit(obs, noise_pct=0.08, eps=eps, pseudocount=0):
     obs = np.asarray(obs)
     if obs.max() == 2:
         obs -= 1
+    #print("obs:", list(obs), file=sys.stderr)
 
     if noise_pct > 1:
         noise_pct /= 100.
@@ -42,9 +43,10 @@ def fit(obs, noise_pct=0.08, eps=eps, pseudocount=0):
     model.add_states([i0, i1])
 
     m = np.mean(obs[:50])
+    #print("mean:", m, file=sys.stderr)
 
-    model.add_transition(model.start, i0, m)
-    model.add_transition(model.start, i1, 1 - m)
+    model.add_transition(model.start, i0, 1 - m)
+    model.add_transition(model.start, i1, m)
     #model.add_transition(model.start, inoise, 0.002)
 
 
@@ -89,6 +91,8 @@ def main(args=None):
     if len(rows) == 0:
         return
     vals = fit([r[2] for r in rows])
+    #print(vals, file=sys.stderr)
+    #1/0
 
     last_start, last_state = None, None
     prev_start = None
@@ -149,10 +153,11 @@ def xo_filter(iname, oname, delta=0.05, min_informative_sites=200):
 
 
 if __name__ == "__main__":
+    """
     import doctest
     res = doctest.testmod()
     print(res, file=sys.stderr)
     if res.failed > 0:
         sys.exit(1)
-
+    """
     main()

@@ -28,7 +28,6 @@ PATH=/scratch/ucgd/lustre/u6000771/gem/tools/bin:/scratch/ucgd/lustre/u6000771/g
 BASE={base}
 
 mkdir -p $BASE/hmm/
-mkdir -p $BASE/combined/
 mkdir -p $BASE/crossovers/
 """.format(base=base)
 
