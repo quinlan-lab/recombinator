@@ -239,8 +239,12 @@ def phased_check(fam, v, gt_bases):
 
             if fam['gt_type'][kid] != HET: continue
             ref = v.ALT[0]
-            kidx = fam_bases[kid].index(ref)
-            pidx = fam_bases[p1].index(ref)
+
+            try:
+                kidx = fam_bases[kid].index(ref)
+                pidx = fam_bases[p1].index(ref)
+            except ValueError:  # one of them had '.'
+                continue
 
             same = int(kidx == pidx)
 
