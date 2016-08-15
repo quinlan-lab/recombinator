@@ -210,21 +210,24 @@ def run(args):
             if hasattr(v, "flush"):
                 v.flush()
                 v.close()
-                for i, line in enumerate(gzip.open(v.name)):
-                    if i == 2: break
-                else:
+                keep = True
+                with gzip.open(v.name) as gfh:
+                    for i, line in enumerate(gfh):
+                        if i == 2: break
+                    else:
+                        keep = False
+                if not keep:
                     os.unlink(v.name)
 
 def phased_check(fam, v, gt_bases):
     """
-    take cases where only 1 parent is HET or where 1 parent is HOM_REF and the
-    other is HOM_ALT
+    take cases where only 1 parent is HET
     """
 
-    hom_pair = tuple(sorted((fam['gt_type'][:2]))) == (HOM_REF, HOM_ALT)
 
     for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
-        if not hom_pair and fam['gt_type'][p1] != HET: continue
+        if fam['gt_type'][p1] != HET: continue
+        if fam['gt_type'][p2] == HET: continue
         # TODO: add impose_quality_control here.
 
         fam_bases = [x.split("|") for x in gt_bases[fam['idxs']]]
@@ -234,17 +237,18 @@ def phased_check(fam, v, gt_bases):
         vbases = "\t".join(gt_bases[fam['idxs']])
         for kid in (2, 3):
 
+            if fam['gt_type'][kid] != HET: continue
+            ref = v.ALT[0]
+            kidx = fam_bases[kid].index(ref)
+            pidx = fam_bases[p1].index(ref)
 
-            same = int(fam_bases[kid][p1] == fam_bases[p1][0])
+            same = int(kidx == pidx)
 
             kid_id = fam['ids'][kid]
             fam['fh-%s-%s' % (parent, kid_id)].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                     parent + "--" + str(kid - 1), fam['family_id'], same, vbases, "%.2f" %
                     v.call_rate, pctiles]) + '\n')
             fam['fh-%s-%s' % (parent, kid_id)].flush()
-
-
-
 
 if __name__ == "__main__":
     main()
