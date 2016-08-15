@@ -61,9 +61,8 @@ ym = running_mean(ys, N)
 # so we can see the line.
 ym[ym == 1] = 0.98
 ym[ym == 0] = 0.02
-print(len(xs), len(ym))
 
-axes[0].plot(xs[N-1:], ym, 'k--')
+axes[0].plot(xs[N-1:], ym, linestyle='--', marker=None, color='0.5')
 
 
 

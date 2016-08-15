@@ -12,6 +12,7 @@ import pomegranate as po
 np.random.seed(42)
 
 eps = 1e-12
+MIN_INFORMATIVE_SITES = 200
 
 def fit(obs, noise_pct=0.08, eps=eps, pseudocount=0):
     """
@@ -42,7 +43,7 @@ def fit(obs, noise_pct=0.08, eps=eps, pseudocount=0):
 
     model.add_states([i0, i1])
 
-    m = np.mean(obs[:50])
+    m = np.mean(obs[:MIN_INFORMATIVE_SITES])
     #print("mean:", m, file=sys.stderr)
 
     model.add_transition(model.start, i0, 1 - m)
@@ -128,7 +129,8 @@ def main(args=None):
     xo_filter(xfh.name, xfh.name.rsplit(".", 1)[0] + ".filtered.bed")
 
 
-def xo_filter(iname, oname, delta=0.05, min_informative_sites=200):
+def xo_filter(iname, oname, delta=0.05,
+        min_informative_sites=MIN_INFORMATIVE_SITES):
     """
     filter x-overs to minimum informative sites and purity (delta).
     merges info for x-os that were previously separated by a spurios x-o
