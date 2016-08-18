@@ -72,12 +72,22 @@ def get_family_dict(fam, smp2idx, args):
 
     f['ids'] = [f[s]['id'] for s in ('dad', 'mom', 'template', 'sib')]
 
-    for p in ('dad', 'mom'):
-        for kid in f['ids'][2:]:
-            f['fh-%s-%s' % (p, kid)] = gzip.open("%s/fam%s/%s.%s-%s.bed.gz" % (args.prefix, sample.family_id, region, p, kid), "w")
-            f['fh-%s-%s' % (p, kid)].write('\t'.join(['chrom', 'start', 'end',
-                'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2',
-                'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+    # we lable the columns with the 4 sample-ids with a '*' to indicate the
+    # parent-child pair for the current scenario.
+    for pi, p in enumerate(f['ids'][:2], start=1):
+        md = 'dad' if pi == 1 else 'mom'
+        dad_lbl = f['ids'][0] + ("*" if pi == 1 else "")
+        mom_lbl = f['ids'][1] + ("*" if pi == 2 else "")
+        for i, kid in enumerate(f['ids'][2:], start=1):
+            sib1_lbl = f['ids'][2] + ("*" if i == 1 else "")
+            sib2_lbl = f['ids'][3] + ("*" if i == 2 else "")
+
+            f['fh-%s-%s' % (md, kid)] = gzip.open("%s/fam%s/%s.%s.%s-%s.bed.gz" % (args.prefix, sample.family_id, region, md, p, kid), "w")
+
+            f['fh-%s-%s' % (md, kid)].write('\t'.join(['chrom', 'start', 'end',
+                'family_id', 'same', dad_lbl, mom_lbl, sib1_lbl, sib2_lbl,
+                #'global_call_rate', 'global_depth_1_10_50_90'
+                ]) + '\n')
 
     # much faster to index with an array.
     f['idxs'] = np.array([f[s]['idx'] for s in ('dad', 'mom', 'template', 'sib')])
@@ -249,9 +259,11 @@ def phased_check(fam, v, gt_bases):
             same = int(kidx == pidx)
 
             kid_id = fam['ids'][kid]
+            parent_id = fam['ids'][p1]
             fam['fh-%s-%s' % (parent, kid_id)].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
-                    parent + "--" + str(kid - 1), fam['family_id'], same, vbases, "%.2f" %
-                    v.call_rate, pctiles]) + '\n')
+                    fam['family_id'], same, vbases
+                    #, "%.2f" % v.call_rate, pctiles
+                    ]) + '\n')
             fam['fh-%s-%s' % (parent, kid_id)].flush()
 
 if __name__ == "__main__":
