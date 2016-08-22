@@ -3,10 +3,10 @@ from collections import defaultdict
 import os
 
 creds = {"account": "quinlan-kp", "partition": "quinlan-kp"}
-PED = "/uufs/chpc.utah.edu/common/home/u6000771/Data/ssc_519.ped"
-DATE = "2016_07_21"
-DATE = "2016_08_12-shapeit-sites"
-DATE = "2016_08_12-shapeit-filtered"
+PED= "/uufs/chpc.utah.edu/common/home/u6000771/Data/ssc_519.ordered.ped"
+
+DATE = "2016_08_21-shapeit-LCR"
+DATE = "2016_08_21-shapeit-sites"
 
 fams = set([x.split()[0] for i, x in enumerate(open(PED)) if i > 0])
 
@@ -34,14 +34,14 @@ mkdir -p $BASE/crossovers/
 tmpl = """
 
 # writes .bed and .filtered.bed for crossovers.
-zcat $BASE/recomb/{chrom}/fam{fam}/{chrom}-*.{parent}-{kid}.bed.gz \\
+zcat $BASE/recomb/{chrom}/fam{fam}/{chrom}.{parent}.*-{kid}.bed.gz \\
         | python hmm.py $BASE/crossovers/chr{chrom}-fam{fam}-{parent}-{kid}  \\
-        | bgzip -c > $BASE/hmm/chr{chrom}-fam{fam}-{parent}-{kid}.hmm.bed.gz &
+        | bgzip -c > $BASE/hmm/chr{chrom}-fam{fam}-{parent}.{kid}.hmm.bed.gz &
 
 """
 
 plot_tmpl = """
-python plotter.py $BASE/hmm/chr{chrom}-fam{fam}-{parent}-{kid}.hmm.bed.gz \\
+python plotter.py $BASE/hmm/chr{chrom}-fam{fam}-{parent}.{kid}.hmm.bed.gz \\
         $BASE/crossovers/chr{chrom}-fam{fam}-{parent}-{kid}.filtered.bed \\
         $BASE/hmm/chr{chrom}-fam{fam}-{parent}-{kid}.hmm.png &
 """

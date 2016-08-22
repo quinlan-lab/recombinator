@@ -100,9 +100,11 @@ def main(args=None):
     n = 0
 
     state_vals = []
+
     for i, row in enumerate((r[-1] for r in rows)):
         if i == 0:
             print("#" + "\t".join(row.keys() + ['hmm-state']))
+            parent_col, kid_col = [k for k in row.keys() if k[-1] == '*']
         print("%s\t%d" % ("\t".join(row.values()), vals[i]))
         if last_state is None:
             last_state = vals[i]
@@ -113,7 +115,7 @@ def main(args=None):
             d = row.copy()
             d['start'] = prev_start
             d['end'] = row['start']
-
+            d['parent'] = d[parent_col]
             d['state-change'] = "%d-%d" % (last_state, vals[i])
             d['informative-sites'] = str(n)
             d['mean_val'] = sum(state_vals) / float(len(state_vals))
