@@ -213,8 +213,12 @@ def run(args):
                     f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                             parent, f['family_id'], val, fam_bases, "%.2f" %
                             v.call_rate, pctiles]) + '\n')
+    kept = _remove_empty(fs)
 
+
+def _remove_empty(fs):
     # remove empty files.
+    kept = []
     for f in fs:
         for v in f.values():
             if hasattr(v, "flush"):
@@ -223,11 +227,14 @@ def run(args):
                 keep = True
                 with gzip.open(v.name) as gfh:
                     for i, line in enumerate(gfh):
-                        if i == 2: break
+                        if i == 2:
+                            kept.append(v.name)
+                            break
                     else:
                         keep = False
                 if not keep:
                     os.unlink(v.name)
+    return kept
 
 def phased_check(fam, v, gt_bases):
     """
