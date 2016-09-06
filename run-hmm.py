@@ -1,12 +1,19 @@
 from slurmpy import Slurm
 from collections import defaultdict
 import os
+import sys
 
+creds = {"account": "ucgd-kp", "partition": "ucgd-kp"}
 creds = {"account": "quinlan-kp", "partition": "quinlan-kp"}
 PED= "/uufs/chpc.utah.edu/common/home/u6000771/Data/ssc_519.ordered.ped"
 
-DATE = "2016_08_21-shapeit-LCR"
-DATE = "2016_08_21-shapeit-sites"
+DATE = "results/2016_08_29-shapeit-2.5M/recomb"
+
+chrom = "5"
+if len(sys.argv) > 1:
+    chrom = sys.argv[1]
+if len(sys.argv) > 2:
+    DATE = sys.argv[2]
 
 fams = set([x.split()[0] for i, x in enumerate(open(PED)) if i > 0])
 
@@ -18,7 +25,7 @@ for toks in (l.rstrip().split() for l in open(PED) if l[0] != '#'):
     if d['mom_id'] in ('0', '-9', ''): continue
     fam_kids[d['family_id']].append(d['sample_id'])
 
-base = "/scratch/ucgd/lustre/u6000771/Projects/src/recombinator/results/{DATE}/".format(**locals())
+base = "{DATE}".format(**locals())
 
 pre = """
 set +e
@@ -34,14 +41,14 @@ mkdir -p $BASE/crossovers/
 tmpl = """
 
 # writes .bed and .filtered.bed for crossovers.
-zcat $BASE/recomb/{chrom}/fam{fam}/{chrom}.{parent}.*-{kid}.bed.gz \\
-        | python hmm.py $BASE/crossovers/chr{chrom}-fam{fam}-{parent}-{kid}  \\
+zcat $BASE/{chrom}/fam{fam}/{chrom}.{parent}.*-{kid}.bed.gz \\
+        | python ~/Projects/src/recombinator/hmm.py $BASE/crossovers/chr{chrom}-fam{fam}-{parent}-{kid}  \\
         | bgzip -c > $BASE/hmm/chr{chrom}-fam{fam}-{parent}.{kid}.hmm.bed.gz &
 
 """
 
 plot_tmpl = """
-python plotter.py $BASE/hmm/chr{chrom}-fam{fam}-{parent}.{kid}.hmm.bed.gz \\
+python ~/Projects/src/recombinator/plotter.py $BASE/hmm/chr{chrom}-fam{fam}-{parent}.{kid}.hmm.bed.gz \\
         $BASE/crossovers/chr{chrom}-fam{fam}-{parent}-{kid}.filtered.bed \\
         $BASE/hmm/chr{chrom}-fam{fam}-{parent}-{kid}.hmm.png &
 """
@@ -59,7 +66,7 @@ for fam in fams:
     for kid in kids:
         for parent in ("mom", "dad"):
             #for chrom in range(1, 23) + ["X", "Y"]:
-            for chrom in [22]:
+            for chrom in [chrom]:
 
                 png = "{base}/hmm/chr{chrom}-fam{fam}-{parent}-{kid}.hmm.png".format(**locals())
                 if os.path.exists(png):

@@ -1,0 +1,8 @@
+shapeit*.log
+shapeit*.m*
+*.log
+*.bim
+*.bed
+*.fam
+results*
+*.vcf.gz

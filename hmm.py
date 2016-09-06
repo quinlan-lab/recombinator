@@ -81,7 +81,7 @@ def main(args=None):
 
     rows = []
     xfh = ts.nopen(args[0] + ".bed", mode="w")
-    xfh.write("chrom\tstart\tend\tparent\tfamily_id\tstate-change\tinformative-sites\tmean_val\n")
+    xfh.write("chrom\tstart\tend\tfamily_id\tparent_id\tkid_id\tstate-change\tinformative-sites\tmean_val\n")
     for d in ts.reader(args[1], header='ordered'):
         if float(d.get('call_rate', 1)) < 0.95: continue
         if d['start'] == 'start': continue
@@ -113,13 +113,15 @@ def main(args=None):
 
         if vals[i] != last_state:
             d = row.copy()
+            d['parent_id'] = parent_col[:-1]
+            d['kid_id'] = kid_col[:-1]
             d['start'] = prev_start
             d['end'] = row['start']
-            d['parent'] = d[parent_col]
+            #d['parent'] = d[parent_col]
             d['state-change'] = "%d-%d" % (last_state, vals[i])
             d['informative-sites'] = str(n)
             d['mean_val'] = sum(state_vals) / float(len(state_vals))
-            xfh.write("{chrom}\t{start}\t{end}\t{parent}\t{family_id}\t{state-change}\t{informative-sites}\t{mean_val}\n".format(**d))
+            xfh.write("{chrom}\t{start}\t{end}\t{family_id}\t{parent_id}\t{kid_id}\t{state-change}\t{informative-sites}\t{mean_val}\n".format(**d))
             last_start = row['start']
             last_state = vals[i]
             state_vals = []
