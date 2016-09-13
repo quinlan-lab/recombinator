@@ -415,6 +415,7 @@ def xplot(fxos, fsites):
 
     if fxos is None:
         plt.savefig(figname)
+        plt.close(fig)
         return
 
     left = xs[0]
@@ -442,6 +443,7 @@ def xplot(fxos, fsites):
             ymin=right_state / 2., ymax=(right_state+1) / 2., ec='none')
 
     plt.savefig(figname)
+    plt.close(fig)
 
 def _remove_empty(fs):
     # remove empty files.
