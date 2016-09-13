@@ -61,7 +61,7 @@ def merlin2vcf(fh, fmap):
             elif "HET" in gt:
                 gts[k] = "0/1"
 
-        print "%s\t%s\t.\tA\tC\t20\tPASS\t.\tGT\t%s" % (p[0], p[1], "\t".join(gts))
+        print "%s\t%s\t.\tA\tC\t60\tPASS\t.\tGT\t%s" % (p[0], p[1], "\t".join(gts))
 
 
 if __name__ == "__main__":

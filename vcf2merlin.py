@@ -19,7 +19,7 @@ def main(args=sys.argv[1:]):
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("--region", help="optional region, e.g. '1:112335-117798' or just '11'", default="")
-    p.add_argument("--min-maf", help="minimum maf to consider", default=0.15, type=float)
+    p.add_argument("--min-maf", help="minimum maf to consider", default=0.03, type=float)
     p.add_argument("ped")
     p.add_argument("vcf")
     p.add_argument("output_prefix")
@@ -52,9 +52,13 @@ def run(args):
 
     k = 0
     for v in vcf(args.region):
+        if v.QUAL < 20: continue
         if v.call_rate < 0.9: continue
         if v.aaf < args.min_maf: continue
-        if v.QUAL < 20: continue
+        if np.mean(v.gt_depths) < 20: continue
+        if np.mean(v.gt_depths) > 400: continue
+        if np.mean(v.gt_quals) < 20: continue
+
         if not v.FILTER in ("PASS", None): continue
         if len(v.ALT) > 1: continue
 
