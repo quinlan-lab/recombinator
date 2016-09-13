@@ -77,6 +77,8 @@ def crossovers(f, min_sites=5):
         if i == 0:
             print("\t".join(s.keys()), file=o)
         print("\t".join(map(str, s.values())), file=o)
+    o.close()
+    return o.name
 
 
 def collapse(dlist, parent_id, kid_id):
@@ -294,9 +296,17 @@ def run(args):
                             parent, f['family_id'], val, fam_bases, "%.2f" %
                             v.call_rate, pctiles]) + '\n')
     kept = _remove_empty(fs)
+    try:
+        from matplotlib.pytplot import plt
+        import seaborn as sns
+    except ImportError:
+        sys.stderr.write("install matpllotlib and seaborn for plots")
     for f in kept:
-        crossovers(f)
+        xos = crossovers(f)
+        plot(xos, f)
 
+def plot(fxos, fsites):
+    raise Exception("TODO")
 
 def _remove_empty(fs):
     # remove empty files.
