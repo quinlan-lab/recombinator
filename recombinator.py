@@ -1,10 +1,11 @@
+from __future__ import print_function
 import argparse
 import sys
 import os
 import re
 import itertools as it
 import gzip
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from operator import itemgetter, attrgetter
 
 import numpy as np
@@ -30,6 +31,84 @@ def main():
         args.prefix = os.path.join(args.prefix, args.region.split(":")[0])
     run(args)
 
+def crossovers(f, min_sites=5):
+    """
+    call the actual crossovers. skip blocks with fewer than min-sites sites and
+    then merge the resulting adjacent blocks in the same state
+    """
+
+
+    fin = gzip.open(f)
+    header = next(fin).rstrip().split("\t")
+    ids = [h for h in header if h[-1] == "*"]
+    try:
+        kid_id = ids[-1].rstrip("*")
+        parent_id = ids[0].rstrip("*")
+    except IndexError:
+        kid_id, parent_id = None, None
+    cache = []
+    last = None
+    for d in (dict(zip(header, l.rstrip().split("\t"))) for l in fin):
+        if d['same'] != last:
+            if parent_id is None:
+                parent_id = d.get('parent_id', None)
+
+            if len(cache) > 0:
+                cache[-1] = collapse(cache[-1], parent_id, kid_id)
+
+            cache.append([])
+
+        cache[-1].append(d)
+        last = d['same']
+
+    cache[-1] = collapse(cache[-1], parent_id, kid_id)
+    cache = enforce_min_sites(cache, min_sites)
+    # now we have starts and ends of the blocks of same state. crossovers occur
+    # betwen those blocks.
+    if len(cache) < 2: return
+    o = open(f.replace(".bed.gz", ".crossovers.bed"), "w")
+    for i in range(len(cache) - 1):
+        s, e = cache[i].copy(), cache[i + 1]
+        st = s.pop('same')
+        s['start'] = int(s['end']) - 1
+        s['end'] = e['start']
+        s['informative-sites-r'] = e['informative-sites']
+        s['change'] = "%s-%s" % (st, e['same'])
+        if i == 0:
+            print("\t".join(s.keys()), file=o)
+        print("\t".join(map(str, s.values())), file=o)
+
+
+def collapse(dlist, parent_id, kid_id):
+    assert len(set(d['same'] for d in dlist)) == 1
+    d = OrderedDict([
+        ('chrom', dlist[0]['chrom']),
+        ('start', dlist[0]['start']),
+        ('end', dlist[-1]['end']),
+        ('same', dlist[0]['same']),
+        ('family_id', dlist[0]['family_id']),
+        ])
+
+    if parent_id is not None:
+        d['parent_id'] = parent_id
+    if kid_id is not None:
+        d['kid_id'] = kid_id
+    d['informative-sites'] = len(dlist)
+    return d
+
+def enforce_min_sites(cache, min_sites):
+    cache = [c for c in cache if c['informative-sites'] >= min_sites]
+    if len(cache) < 2: return cache
+    icache = [cache[0]]
+    for i, c in enumerate(cache[1:]):
+        if c['same'] != icache[-1]['same'] or c['chrom'] != icache[-1]['chrom']:
+            icache.append(c)
+            continue
+
+        icache[-1]['end'] = c['end']
+        icache[-1]['informative-sites'] += c['informative-sites']
+
+    return icache
 
 def get_family_dict(fam, smp2idx, args):
     """
@@ -67,8 +146,8 @@ def get_family_dict(fam, smp2idx, args):
             raise
     f['fh-dad'] = gzip.open("%s/fam%s/%s.dad.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-mom'] = gzip.open("%s/fam%s/%s.mom.bed.gz" % (args.prefix, sample.family_id, region), "w")
-    f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
-    f['fh-mom'].write('\t'.join(['chrom', 'start', 'end', 'parent', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+    f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent_id', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+    f['fh-mom'].write('\t'.join(['chrom', 'start', 'end', 'parent_id', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
 
     f['ids'] = [f[s]['id'] for s in ('dad', 'mom', 'template', 'sib')]
 
@@ -167,7 +246,7 @@ def run(args):
     # header
     for i, v in enumerate(vcf_iter, start=1):
         if i % 50000 == 0:
-            print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
+            print("at record %d (%s:%d)" % (i, v.CHROM, v.POS), file=sys.stderr)
         if v.var_type != 'snp':
             if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
                 continue
@@ -215,6 +294,8 @@ def run(args):
                             parent, f['family_id'], val, fam_bases, "%.2f" %
                             v.call_rate, pctiles]) + '\n')
     kept = _remove_empty(fs)
+    for f in kept:
+        crossovers(f)
 
 
 def _remove_empty(fs):
