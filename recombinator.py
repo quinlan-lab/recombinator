@@ -91,10 +91,11 @@ def remove_bad_regions(cache, n=5):
     """
     assert n % 2 == 1
     for i in range(2):
+        if len(cache) < 2: break
         c0 = cache[::2]
-        assert len(set([c['same'] for c in c0])) == 1
+        assert len(set([c['same'] for c in c0])) == 1, cache
         c1 = cache[1::2]
-        assert len(set([c['same'] for c in c1])) == 1
+        assert len(set([c['same'] for c in c1])) == 1, cache
 
         vals0 = np.array([d['informative-sites'] for d in c0])
         vals1 = np.array([d['informative-sites'] for d in c1])
@@ -109,7 +110,7 @@ def remove_bad_regions(cache, n=5):
         cache.sort(key=itemgetter('start'))
         # this merges adjacent blocks
         cache = enforce_min_sites(cache, 0)
-    return cache
+    return enforce_min_sites(cache, 0)
 
 def write_crossovers(cache, fname):
     # now we have starts and ends of the blocks of same state. crossovers occur
