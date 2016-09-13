@@ -169,7 +169,8 @@ def run(args):
         if i % 50000 == 0:
             print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
         if v.var_type != 'snp':
-            continue
+            if len(v.REF) > 4 or len(v.ALT[0]) > 4:
+                continue
         if v.call_rate < 0.95: continue
 
         # expensive to get gt_bases and we only need it at the crossover.
@@ -241,16 +242,12 @@ def phased_check(fam, v, gt_bases):
     take cases where only 1 parent is HET
     """
 
-
     for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
         if fam['gt_type'][p1] != HET: continue
         if fam['gt_type'][p2] == HET: continue
         # TODO: add impose_quality_control here.
 
         fam_bases = [x.split("|") for x in gt_bases[fam['idxs']]]
-        #pctiles = "|".join("%.0f" % v for v in
-        #        np.percentile(v.gt_depths, (1, 10, 50, 90)))
-        pctiles = "|"
         vbases = "\t".join(gt_bases[fam['idxs']])
         for kid in (2, 3):
 
