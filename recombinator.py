@@ -131,8 +131,8 @@ def is_informative(fam):
     one parent must be HET and the other HOM.
     """
     gt_types = fam['gt_type']  # order is dad, then mom
-    return (gt_types[1] == HOM_REF and gt_types[0] == HET) or \
-           (gt_types[0] == HOM_REF and gt_types[1] == HET)
+    return (gt_types[1] in (HOM_ALT, HOM_REF) and gt_types[0] == HET) or \
+           (gt_types[0] in (HOM_REF, HOM_ALT) and gt_types[1] == HET)
 
 def run(args):
     ped = Ped(args.ped)
