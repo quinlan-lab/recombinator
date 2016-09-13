@@ -17,8 +17,8 @@ HOM_REF, HET, HOM_ALT, UNKNOWN = range(4)
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--min-depth", dest='min_depth', type=int, default=20)
-    p.add_argument("--min-gq", dest='min_gq', type=int, default=30)
+    p.add_argument("--min-depth", dest='min_depth', type=int, default=18)
+    p.add_argument("--min-gq", dest='min_gq', type=int, default=20)
     p.add_argument("--families", default=None, type=str)
     p.add_argument("--ped", required=True)
     p.add_argument("--vcf", required=True)
@@ -169,7 +169,7 @@ def run(args):
         if i % 50000 == 0:
             print >>sys.stderr, "at record %d (%s:%d)" % (i, v.CHROM, v.POS)
         if v.var_type != 'snp':
-            if len(v.REF) > 4 or len(v.ALT[0]) > 4:
+            if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
                 continue
         if v.call_rate < 0.95: continue
 
