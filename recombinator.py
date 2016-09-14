@@ -295,10 +295,14 @@ def run(args):
     fs = [get_family_dict(fam, smp2idx, args) for fam in fams]
     del fam
 
-    # header
+    fsites = open("%s.sites" % args.prefix, "w")
+    nused = 0
+
+    i = 0
     for i, v in enumerate(vcf_iter, start=1):
         if i % 200000 == 0:
-            print("at record %d (%s:%d)" % (i, v.CHROM, v.POS), file=sys.stderr)
+            print("at record %d (%s:%d). used %d [%.2f%%]" % (i, v.CHROM, v.POS,
+                   nused, 100. *float(nused)/i), file=sys.stderr)
             sys.stderr.flush()
         if v.var_type != 'snp':
             if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
@@ -310,6 +314,7 @@ def run(args):
         gt_types, gt_quals, gt_depths = v.gt_types, v.gt_quals, v.gt_depths
         gt_phases = v.gt_phases
 
+        nsites = 0 # track the number of families that had this as an informative site.
         for f in fs:
             # embellish f with the genotype info for each family member.
             # is_informative only needs gt_types, so we check that first...
@@ -341,14 +346,19 @@ def run(args):
                 if gt_bases is None:
                     gt_bases = v.gt_bases
                 fam_bases = "\t".join(gt_bases[f['idxs']])
-                pctiles = "|".join("%.0f" % v for v in
+                pctiles = "|".join("%.0f" % de for de in
                         np.percentile(v.gt_depths, (1, 10, 50, 90)))
-
+                nsites += 1
                 val = 1 if f['gt_type'][2] == f['gt_type'][3] else 0
                 f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                         f['ids'][p1], f['family_id'], val, fam_bases, "%.2f" %
                         v.call_rate, pctiles]) + '\n')
+            if nsites > 0:
+                fsites.write("%s:%d\t%d\n" % (v.CHROM, v.POS, nsites))
+                nused += 1
 
+    fsites.close()
+    print("finished at record %d (%s:%d). used %d [%.2f%%]" % (i, v.CHROM, v.POS, nused, 100. * float(nused)/i), file=sys.stderr)
     kept = _remove_empty(fs)
     try:
         import matplotlib.pyplot as plt
