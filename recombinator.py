@@ -299,6 +299,7 @@ def run(args):
     for i, v in enumerate(vcf_iter, start=1):
         if i % 200000 == 0:
             print("at record %d (%s:%d)" % (i, v.CHROM, v.POS), file=sys.stderr)
+            sys.stderr.flush()
         if v.var_type != 'snp':
             if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
                 continue
@@ -383,16 +384,16 @@ def xplot(fxos, fsites):
     import seaborn as sns
     figname = fsites.replace(".bed.gz", ".png")
 
-    fig, ax = plt.subplots(1, sharex=True)
+    fig, ax = plt.subplots(1, sharex=True, figsize=(12, 4))
 
     ax.set_title("crossovers")
-    name = fsites.split("/")[-1].split(".")[0]
+    name = fsites.split("/")[-1].rsplit(".", 1)[0]
     fig.suptitle(name)
 
     xs, ys = [], []
     for row in rdr(fsites):
         xs.append(int(row['start']))
-        ys.append(int(row['same']))
+        ys.append(int(row['same']) / 2.0 + 0.25) # 0 -> 0.25, 1 -> 0.75
 
     ax.plot(xs, ys, 'k.', zorder=5)
     rng = xs[-1] - xs[0]
@@ -410,8 +411,10 @@ def xplot(fxos, fsites):
     ax.get_xaxis().set_major_formatter(ticker.FuncFormatter(fmtr))
     ax.set_xlim(xmin=xs[0] - 1, xmax=xs[-1] + 1)
     ax.set_ylim(ymin=0, ymax=1)
-    ax.set_ylabel('State')
     ax.set_xlabel('Genomic Position')
+    ax.set_yticks([0.25, 0.75])
+    ax.set_yticklabels(["state 0", "state 1"], rotation='vertical')
+
 
     if fxos is None:
         plt.savefig(figname)
