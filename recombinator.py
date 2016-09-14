@@ -1,5 +1,6 @@
 from __future__ import print_function
 import argparse
+import time
 import sys
 import os
 import re
@@ -233,7 +234,7 @@ def add_genotype_info(fam, gt_types=None,
     if not gt_phases is None:
         fam['gt_phase'] = gt_phases
     if not gt_types is None:
-        fam['gt_type'] = np.array(gt_types[fam['idxs']])
+        fam['gt_type'] = list(gt_types[fam['idxs']])
     if not gt_depths is None:
         fam['gt_depth'] = np.array(gt_depths[fam['idxs']])
     if not gt_quals is None:
@@ -296,13 +297,15 @@ def run(args):
     del fam
 
     fsites = open("%s.sites" % args.prefix, "w")
-    nused = 0
 
-    i = 0
+    nused, i, report_at, t0 = 0, 0, 10000, time.time()
     for i, v in enumerate(vcf_iter, start=1):
-        if i % 200000 == 0:
-            print("at record %d (%s:%d). used %d [%.2f%%]" % (i, v.CHROM, v.POS,
-                   nused, 100. *float(nused)/i), file=sys.stderr)
+        if i % report_at == 0:
+            persec = i / float(time.time() - t0)
+            print("at record %d (%s:%d) %.1f/sec. used %d [%.2f%%]" % (i, v.CHROM, v.POS,
+                   persec, nused, 100. *float(nused)/i), file=sys.stderr)
+            if report_at < 100000 and i >= 10 * report_at:
+                report_at = 200000
             sys.stderr.flush()
         if v.var_type != 'snp':
             if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
@@ -316,16 +319,21 @@ def run(args):
 
         nsites = 0 # track the number of families that had this as an informative site.
         for f in fs:
-            # embellish f with the genotype info for each family member.
-            # is_informative only needs gt_types, so we check that first...
-            add_genotype_info(f, gt_types=gt_types, gt_phases=gt_phases)
-            # sanity and quality checks
 
-            if np.all(f['gt_phase']):
+            # is_informative only needs gt_types, so we check that first...
+            add_genotype_info(f, gt_types=gt_types)
+
+            # need exactly 1 het parent for both phased an unphased checks.
+            if 1 != ((f['gt_type'][0] == HET) + (f['gt_type'][1] == HET)):
+                continue
+
+            add_genotype_info(f, gt_phases=gt_phases)
+
+            if all(f['gt_phase']):
                 if gt_bases is None:
                     gt_bases = v.gt_bases
 
-                phased_check(f, v, gt_bases)
+                nsites += phased_check(f, v, gt_bases)
                 continue
 
             if not is_informative(f):
@@ -353,12 +361,15 @@ def run(args):
                 f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                         f['ids'][p1], f['family_id'], val, fam_bases, "%.2f" %
                         v.call_rate, pctiles]) + '\n')
-            if nsites > 0:
-                fsites.write("%s:%d\t%d\n" % (v.CHROM, v.POS, nsites))
-                nused += 1
+
+        fsites.write("%s:%d\t%d\n" % (v.CHROM, v.POS, nsites))
+        if nsites > 0:
+            nused += 1
 
     fsites.close()
-    print("finished at record %d (%s:%d). used %d [%.2f%%]" % (i, v.CHROM, v.POS, nused, 100. * float(nused)/i), file=sys.stderr)
+    persec = i / float(time.time() - t0)
+    print("finished at record %d (%s:%d) %.f/sec. used %d [%.2f%%]" % (i, v.CHROM, v.POS,
+                   persec, nused, 100. *float(nused)/i), file=sys.stderr)
     kept = _remove_empty(fs)
     try:
         import matplotlib.pyplot as plt
@@ -482,17 +493,23 @@ def phased_check(fam, v, gt_bases):
     """
     take cases where only 1 parent is HET
     """
+    gt_type = fam['gt_type']
+    # need at least 1 het kid
+    if 0 == ((gt_type[2] == 1) + (gt_type[3] == 1)):
+        return 0
 
+    used = 0
     for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
-        if fam['gt_type'][p1] != HET: continue
-        if fam['gt_type'][p2] == HET: continue
+        if gt_type[p1] != HET: continue
+        if gt_type[p2] == HET: continue
         # TODO: add impose_quality_control here.
 
         fam_bases = [x.split("|") for x in gt_bases[fam['idxs']]]
         vbases = "\t".join(gt_bases[fam['idxs']])
+
         for kid in (2, 3):
 
-            if fam['gt_type'][kid] != HET: continue
+            if gt_type[kid] != HET: continue
             ref = v.ALT[0]
 
             try:
@@ -502,6 +519,7 @@ def phased_check(fam, v, gt_bases):
                 continue
 
             same = int(kidx == pidx)
+            used += 1
 
             kid_id = fam['ids'][kid]
             parent_id = fam['ids'][p1]
@@ -509,7 +527,7 @@ def phased_check(fam, v, gt_bases):
                     fam['family_id'], same, vbases
                     #, "%.2f" % v.call_rate, pctiles
                     ]) + '\n')
-            fam['fh-%s-%s' % (parent, kid_id)].flush()
+    return int(used > 0)
 
 if __name__ == "__main__":
     import doctest
