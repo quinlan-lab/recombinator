@@ -1,32 +1,60 @@
-For mom and dad:
+recombinator
+============
+
+*recombinator* calls crossovers given a phased or unphased VCF with quartets.
+
+when run like:
 
 ```
 python recombinator.py \
-	--ped K34175.ped \
-	--vcf K34175.subset.snps.phased.vcf.gz \
-	--families K34175 \
-	| head -n 10
-chrom	start	end	parent	family_id	same(1)_diff(2)	dad	mom	sib1	sib2	global_call_rate	global_depth_1_10_50_90
-1	14932	14933	dad	K34175	1	G/A	G/G	G/G	G/G	1.00	41|43|51|61
-1	14975	14976	dad	K34175	1	G/A	G/G	G/G	G/G	1.00	41|42|44|58
-1	15189	15190	mom	K34175	2	G/G	G/A	G/G	G/A	1.00	32|37|52|68
-1	15446	15447	dad	K34175	1	A/G	A/A	A/A	A/A	1.00	43|44|50|82
-1	16256	16257	dad	K34175	1	G/C	G/G	G/C	G/C	1.00	34|34|36|52
-1	16486	16487	mom	K34175	2	T/T	T/C	T/C	T/T	1.00	61|64|72|74
-1	16496	16497	mom	K34175	1	A/A	A/G	A/G	A/G	1.00	58|59|66|77
-1	17537	17538	mom	K34175	1	C/C	C/A	C/A	C/A	1.00	35|36|39|42
-1	19917	19918	dad	K34175	2	G/C	G/G	G/G	G/C	1.00	36|38|45|49
+    --ped $ped \
+    --vcf $vcf \
+    --region $chrom \
+    --prefix xos
 ```
 
+This will output a directory structure with crossovers per-family and then an aggregate file
+with all families that looks like:
+```
+chrom	start	end	family_id	parent_id	informative-sites	informative-sites-r	change
+6	5853504	5853541	fam1	ss443mom	385	3	0-1
+6	5853571	5863131	fam1	ss443mom	3	86	1-0
+6	6176624	6177027	fam1	ss443mom	86	3703	0-1
+6	16398958	16402108	fam1	ss443mom	3703	1976	1-0
+6	21955963	21959436	fam1	ss443mom	1976	2620	0-1
+6	27163297	27163317	fam1	ss443mom	2620	9	1-0
+6	27163370	27166175	fam1	ss443mom	9	1778	0-1
+6	10120946	10122850	fam1	ss443dad	1973	5720	0-1
+6	24851786	24852750	fam1	ss443dad	5720	3328	1-0
+```
 
-Mark crossovers:
+That's for unphased data. For phased data, it will also show the kid in
+which the crossover is detected (not possible in unphased).
 
-    python remove_noise.py --bg K34175.paternal.crossovers.bedgraph \
-    | awk '{if ($4 =="1") {print $1"\t"$2"\t"$3"\t.\t.\t+"} else {print $1"\t"$2"\t"$3"\t.\t.\t-"}}' \
-    | bedtools merge -s -i - \
-    | bedtools groupby -g 1,4 -c 2,3 -o min,max \
-    | awk '{if ($2=="+"){print $1"\t"$3"\t"$4"\t1"} else {print $1"\t"$3"\t"$4"\t2"}}' \
-    | python report_crossovers.py --bg /dev/stdin
-    1	8199262	8213868
-    1	64090376	64096094
-    1	165191701	165193662
+There will be files:
++ $prefix/$region.crossovers-unfiltered.bed
+  - contains the only mimimally filtered crossovers that seem valid for all samples
++ $prefix/$region.crossovers.bed
+  - contains a more filtered set (but may exclude small gene conversions) for all samples
++ $prefix/$region/ directory also contains the above to files per-family
++ $prefix/$region/$region.$family.png shows a plot of the crossovers like the example below.
++ $prefix/$region/$region.$family.$parent.bed.gz contains all of the informative sites
+  in that parent. Any time the 'same' column changes, there is a putative crossover.
+
+Example Plot
+------------
+
+First we show where there is a true crossover. The black points indicate informative variants.
+The values of the black points indicate the crossover state where
+the value is 1 if the alternate allele is at the same index (1st or 2nd) in both the parent
+and the kid. The value is 0 if they are different. We can see that the genotype calls are extremely
+good here, in many cases, we'd expect to see more single points outside of the blue blocks which
+indicate the inferred state for a region. The red line indicates the location of a crossover.
+
+![xo](github.com/png "Clean Crossover")
+
+Below, we show a case where there is no crossover for the entire chromosome. We do see a few noisy
+points that are likely due to genotyping error.
+
+![noxo](github.com/png "No Crossovers")
+
