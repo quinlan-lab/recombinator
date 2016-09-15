@@ -51,10 +51,10 @@ and the kid. The value is 0 if they are different. We can see that the genotype 
 good here, in many cases, we'd expect to see more single points outside of the blue blocks which
 indicate the inferred state for a region. The red line indicates the location of a crossover.
 
-![xo](github.com/png "Clean Crossover")
+![xo](https://cloud.githubusercontent.com/assets/1739/18555974/1697ac52-7b27-11e6-8faf-9659b2fd9c15.png "Clean Crossover")
 
 Below, we show a case where there is no crossover for the entire chromosome. We do see a few noisy
 points that are likely due to genotyping error.
 
-![noxo](github.com/png "No Crossovers")
+![noxo](https://cloud.githubusercontent.com/assets/1739/18555978/19f7dd54-7b27-11e6-8da8-eb749b8093ce.png "No Crossovers")
 
