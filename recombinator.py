@@ -1,6 +1,7 @@
 from __future__ import print_function
 import argparse
 import time
+import shutil
 import sys
 import os
 import re
@@ -31,6 +32,7 @@ def main():
     if args.region:
         args.prefix = os.path.join(args.prefix, args.region.split(":")[0])
     run(args)
+
 
 def crossovers(f, min_sites=20):
     """
@@ -65,9 +67,9 @@ def crossovers(f, min_sites=20):
     # remove single and double-tons immediately
     cache = remove_bad_regions(cache)
     cache = enforce_min_sites(cache, 3)
-    write_crossovers(cache, f.replace('.bed.gz', '.crossovers-unfiltered.bed'))
+    unf = write_crossovers(cache, f.replace('.bed.gz', '.crossovers-unfiltered.bed'))
     cache = enforce_min_sites(cache, min_sites)
-    return write_crossovers(cache, f.replace('.bed.gz', '.crossovers.bed'))
+    return write_crossovers(cache, f.replace('.bed.gz', '.crossovers.bed')), unf
 
 
 def xmean(x, N):
@@ -245,7 +247,7 @@ def impose_quality_control(fam, args):
     Make sure the genotype data for the family is up to snuff
     """
     # NOTE: any is much faster than np.any for small arrays.
-    if any(fam['gt_type'] == UNKNOWN):
+    if UNKNOWN in fam['gt_type']:
         return False
 
     if any(fam['gt_qual'] < args.min_gq):
@@ -297,6 +299,9 @@ def run(args):
     del fam
 
     fsites = open("%s.sites" % args.prefix, "w")
+    # fcalls contains the crossovers for all samples.
+    fcalls = open("%s.crossovers.bed" % args.prefix, "w")
+    funfiltered = open("%s.crossovers-unfiltered.bed" % args.prefix, "w")
 
     nused, i, report_at, t0 = 0, 0, 10000, time.time()
     for i, v in enumerate(vcf_iter, start=1):
@@ -304,7 +309,9 @@ def run(args):
             persec = i / float(time.time() - t0)
             print("at record %d (%s:%d) %.1f/sec. used %d [%.2f%%]" % (i, v.CHROM, v.POS,
                    persec, nused, 100. *float(nused)/i), file=sys.stderr)
-            if report_at < 100000 and i >= 10 * report_at:
+            if report_at < 100000 and i >= 4 * report_at:
+                report_at = 20000
+            if report_at < 100000 and i >= 5 * report_at:
                 report_at = 200000
             sys.stderr.flush()
         if v.var_type != 'snp':
@@ -378,9 +385,24 @@ def run(args):
     except ImportError:
         sys.stderr.write("install matplotlib and seaborn for plots\n")
         plot = _plot
-    for f in kept:
-        xos = crossovers(f)
+    for i, f in enumerate(kept):
+        xos, unf = crossovers(f)
+
+        if unf is not None:
+            with open(unf) as fh:
+                if i != 0: fh.readline()
+                shutil.copyfileobj(fh, funfiltered)
+                funfiltered.flush()
+
+        # write to the joint file of all samples.
+        if xos is not None:
+            with open(xos) as fh:
+                if i != 0: fh.readline()
+                shutil.copyfileobj(fh, fcalls)
+                fcalls.flush()
+
         plot(xos, f)
+    fcalls.close()
 
 def _plot(*args, **kwargs):
     pass
