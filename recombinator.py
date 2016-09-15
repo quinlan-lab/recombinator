@@ -17,6 +17,18 @@ from peddy import Ped
 
 HOM_REF, HET, HOM_ALT, UNKNOWN = range(4)
 
+def filter_main(argv):
+    p = argparse.ArgumentParser()
+    p.add_argument("--min-sites", type=int, default=20)
+    p.add_argument("--prefix", required=True, help="prefix for output")
+    p.add_argument("sites", nargs="+", help=".bed.gz files containing state at each informative site")
+
+    args = p.parse_args(argv)
+    try:
+        os.makedirs(os.path.dirname(args.prefix))
+    except OSError:
+        pass
+    call_all(args.sites, args.prefix, args.min_sites)
 
 def main():
     p = argparse.ArgumentParser()
@@ -34,7 +46,7 @@ def main():
     run(args)
 
 
-def crossovers(f, min_sites=20):
+def crossovers(f, fhcalls, fhfilt, min_sites=20):
     """
     call the actual crossovers. skip blocks with fewer than min-sites sites and
     then merge the resulting adjacent blocks in the same state
@@ -67,9 +79,10 @@ def crossovers(f, min_sites=20):
     # remove single and double-tons immediately
     cache = remove_bad_regions(cache)
     cache = enforce_min_sites(cache, 3)
-    unf = write_crossovers(cache, f.replace('.bed.gz', '.crossovers-unfiltered.bed'))
+
+    write_crossovers(cache, fhcalls)
     cache = enforce_min_sites(cache, min_sites)
-    return write_crossovers(cache, f.replace('.bed.gz', '.crossovers.bed')), unf
+    return write_crossovers(cache, fhfilt)
 
 
 def xmean(x, N):
@@ -115,11 +128,12 @@ def remove_bad_regions(cache, n=5):
         cache = enforce_min_sites(cache, 0)
     return enforce_min_sites(cache, 0)
 
-def write_crossovers(cache, fname):
+
+def write_crossovers(cache, fh):
     # now we have starts and ends of the blocks of same state. crossovers occur
     # betwen those blocks.
     if len(cache) < 2: return
-    o = open(fname, "w")
+    xos = []
     for i in range(len(cache) - 1):
         s, e = cache[i].copy(), cache[i + 1]
         st = s.pop('same')
@@ -127,11 +141,12 @@ def write_crossovers(cache, fname):
         s['end'] = e['start']
         s['informative-sites-r'] = e['informative-sites']
         s['change'] = "%s-%s" % (st, e['same'])
-        if i == 0:
-            print("\t".join(s.keys()), file=o)
-        print("\t".join(map(str, s.values())), file=o)
-    o.close()
-    return o.name
+        if i == 0 and fh.tell() == 0:
+            # only write the header for the first round.
+            print("\t".join(s.keys()), file=fh)
+        print("\t".join(map(str, s.values())), file=fh)
+        xos.append(s)
+    return xos
 
 
 def collapse(dlist, parent_id, kid_id):
@@ -300,18 +315,18 @@ def run(args):
 
     fsites = open("%s.sites" % args.prefix, "w")
     # fcalls contains the crossovers for all samples.
-    fcalls = open("%s.crossovers.bed" % args.prefix, "w")
-    funfiltered = open("%s.crossovers-unfiltered.bed" % args.prefix, "w")
 
     nused, i, report_at, t0 = 0, 0, 10000, time.time()
     for i, v in enumerate(vcf_iter, start=1):
         if i % report_at == 0:
             persec = i / float(time.time() - t0)
-            print("at record %d (%s:%d) %.1f/sec. used %d [%.2f%%]" % (i, v.CHROM, v.POS,
-                   persec, nused, 100. *float(nused)/i), file=sys.stderr)
-            if report_at < 100000 and i >= 4 * report_at:
+            print("%s:%d (%.1f/sec) %.2f%% informative (%d/%d variants)" % (v.CHROM, v.POS,
+                persec, 100.0 * nused/i, nused, i), file=sys.stderr)
+            if i == 20000:
+                report_at = 40000
+            if i == 40000:
                 report_at = 20000
-            if report_at < 100000 and i >= 5 * report_at:
+            if i == 100000:
                 report_at = 200000
             sys.stderr.flush()
         if v.var_type != 'snp':
@@ -375,9 +390,21 @@ def run(args):
 
     fsites.close()
     persec = i / float(time.time() - t0)
-    print("finished at record %d (%s:%d) %.f/sec. used %d [%.2f%%]" % (i, v.CHROM, v.POS,
-                   persec, nused, 100. *float(nused)/i), file=sys.stderr)
+    print("finished at %s:%d (%.1f/sec) %.2f%% informative (%d/%d variants)" % (v.CHROM, v.POS,
+        persec, 100.0 * nused/i, nused, i), file=sys.stderr)
     kept = _remove_empty(fs)
+    call_all(kept, args.prefix, min_sites=20)
+
+
+def call_all(kept, prefix, min_sites=20):
+    """
+    call all takes the informative sites, calls the crossovers, and makes plots.
+    """
+    iprefix = prefix if prefix[-1] in "./" else (prefix + ".")
+
+    fcalls = open("%scrossovers.bed" % iprefix, "w")
+    funfiltered = open("%scrossovers-unfiltered.bed" % iprefix, "w")
+
     try:
         import matplotlib.pyplot as plt
         import seaborn as sns
@@ -386,23 +413,12 @@ def run(args):
         sys.stderr.write("install matplotlib and seaborn for plots\n")
         plot = _plot
     for i, f in enumerate(kept):
-        xos, unf = crossovers(f)
+        xos = crossovers(f, fcalls, funfiltered, min_sites)
+        plot(xos, f, prefix)
 
-        if unf is not None:
-            with open(unf) as fh:
-                if i != 0: fh.readline()
-                shutil.copyfileobj(fh, funfiltered)
-                funfiltered.flush()
-
-        # write to the joint file of all samples.
-        if xos is not None:
-            with open(xos) as fh:
-                if i != 0: fh.readline()
-                shutil.copyfileobj(fh, fcalls)
-                fcalls.flush()
-
-        plot(xos, f)
-    fcalls.close()
+    fcalls.close();
+    funfiltered.close()
+    print("wrote aggregated calls to: %s and %s" % (fcalls.name, funfiltered.name), file=sys.stderr)
 
 def _plot(*args, **kwargs):
     pass
@@ -421,11 +437,22 @@ def rdr(f, ordered=False):
             yield dict(zip(header, toks))
     fh.close()
 
-def xplot(fxos, fsites):
+def xplot(xos, fsites, prefix):
     import matplotlib.pyplot as plt
     from matplotlib import ticker
     import seaborn as sns
-    figname = fsites.replace(".bed.gz", ".png")
+    figname = os.path.basename(fsites).replace(".bed.gz", ".png")
+    row = next(rdr(fsites))
+    if prefix.endswith(os.path.sep + row['chrom']):
+        d = os.path.sep.join((prefix, "fam" + row['family_id']))
+    else:
+        d = os.path.sep.join((prefix, row['chrom'], "fam" + row['family_id']))
+    try:
+        os.makedirs(d)
+    except OSError:
+        pass
+    figname = os.path.join(d, figname)
+
 
     fig, ax = plt.subplots(1, sharex=True, figsize=(12, 4))
 
@@ -459,14 +486,14 @@ def xplot(fxos, fsites):
     ax.set_yticklabels(["state 0", "state 1"], rotation='vertical')
 
 
-    if fxos is None:
+    if xos is None:
         plt.savefig(figname)
         plt.close(fig)
         return
 
     left = xs[0]
     # plot the runs and plot the actual crossovers in red.
-    for row in rdr(fxos):
+    for row in xos:
         left_state = int(row['change'].split("-")[0])
         ax.axvspan(xmin=left, xmax=int(row['start']),
                 ymin=left_state / 2., ymax=(left_state+1) / 2.,
@@ -554,4 +581,7 @@ def phased_check(fam, v, gt_bases):
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
+    if len(sys.argv) > 1 and sys.argv[1] == "filter":
+        sys.exit(filter_main(sys.argv[2:]))
+
     main()

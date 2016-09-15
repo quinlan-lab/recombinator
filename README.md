@@ -13,7 +13,7 @@ python recombinator.py \
     --prefix xos
 ```
 
-This will output a directory structure with crossovers per-family and then an aggregate file
+This will output a directory structure with informative sites per-family and then an aggregate file
 with all families that looks like:
 ```
 chrom	start	end	family_id	parent_id	informative-sites	informative-sites-r	change
@@ -28,7 +28,7 @@ chrom	start	end	family_id	parent_id	informative-sites	informative-sites-r	change
 6	24851786	24852750	fam1	ss443dad	5720	3328	1-0
 ```
 
-That's for unphased data. For phased data, it will also show the kid in
+That's for unphased data. For phased data, it will also list the kid in
 which the crossover is detected (not possible in unphased).
 
 There will be files:
@@ -36,7 +36,6 @@ There will be files:
   - contains the only mimimally filtered crossovers that seem valid for all samples
 + $prefix/$region.crossovers.bed
   - contains a more filtered set (but may exclude small gene conversions) for all samples
-+ $prefix/$region/ directory also contains the above to files per-family
 + $prefix/$region/$region.$family.png shows a plot of the crossovers like the example below.
 + $prefix/$region/$region.$family.$parent.bed.gz contains all of the informative sites
   in that parent. Any time the 'same' column changes, there is a putative crossover.
