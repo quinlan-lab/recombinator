@@ -67,6 +67,7 @@ def crossovers(f, fhcalls, fhfilt, min_sites=20):
                 parent_id = d.get('parent_id', None)
 
             if len(cache) > 0:
+                # when we add the next set, we 'collapse' the last block.
                 cache[-1] = collapse(cache[-1], parent_id, kid_id)
 
             cache.append([])
@@ -99,6 +100,30 @@ def xmean(x, N):
     assert res.shape == x.shape
     return res
 
+def find_consecutive_low(vals, min_value=5):
+    """
+    >>> find_consecutive_low([10, 3, 5])
+    []
+    >>> find_consecutive_low([10, 2, 2])
+    [1, 2]
+    >>> find_consecutive_low([10, 2, 2, 8, 2, 2, 8])
+    [1, 2, 4, 5]
+    >>> find_consecutive_low([10, 2, 2, 8, 2, 2, 2])
+    [1, 2, 4, 5, 5, 6]
+    >>> find_consecutive_low([2, 2, 2, 8, 2, 2, 2])
+    [0, 1, 1, 2, 4, 5, 5, 6]
+    >>> find_consecutive_low([2, 2])
+    [0, 1]
+    >>> find_consecutive_low([2, 10, 2])
+    []
+    """
+    low = []
+    for i, (v1, v2) in enumerate(it.izip(vals, vals[1:])):
+        if v1 < min_value and v2 < min_value:
+            low.append(i)
+            low.append(i + 1)
+    return low
+
 
 def remove_bad_regions(cache, n=5):
     """
@@ -108,24 +133,34 @@ def remove_bad_regions(cache, n=5):
     assert n % 2 == 1
     for i in range(2):
         if len(cache) < 2: break
+        # c0 and c1 contain only values from the same state.
+        # if there are adjacent, small blocks, we are pretty sure
+        # they are spurious
         c0 = cache[::2]
         assert len(set([c['same'] for c in c0])) == 1, cache
         c1 = cache[1::2]
         assert len(set([c['same'] for c in c1])) == 1, cache
 
-        vals0 = np.array([d['informative-sites'] for d in c0])
-        vals1 = np.array([d['informative-sites'] for d in c1])
+        vals0 = [d['informative-sites'] for d in c0]
+        vals1 = [d['informative-sites'] for d in c1]
 
-        keep0, = np.where(xmean(vals0, 2) >= n)
-        keep1, = np.where(xmean(vals1, 2) >= n)
-        keep0, keep1 = set(keep0), set(keep1)
+        #keep0, = np.where(xmean(vals0, 2) >= n)
+        #keep1, = np.where(xmean(vals1, 2) >= n)
+        #keep0, keep1 = set(keep0), set(keep1)
+        drop0 = frozenset(find_consecutive_low(vals0))
+        drop1 = frozenset(find_consecutive_low(vals1))
 
-        cache = [c for i, c in enumerate(c0) if i in keep0]
-        cache += [c for i, c in enumerate(c1) if i in keep1]
+        cache = [c for i, c in enumerate(c0) if i not in drop0]
+        cache += [c for i, c in enumerate(c1) if i not in drop1]
 
         cache.sort(key=itemgetter('start'))
         # this merges adjacent blocks
         cache = enforce_min_sites(cache, 0)
+
+    vals = [d['informative-sites'] for d in cache]
+    drop = frozenset(find_consecutive_low(vals))
+    cache = [c for i, c in enumerate(cache) if i not in drop]
+
     return enforce_min_sites(cache, 0)
 
 
@@ -150,6 +185,7 @@ def write_crossovers(cache, fh):
 
 
 def collapse(dlist, parent_id, kid_id):
+    "collapse converts the list of sites into a summary dict of the block."
     assert len(set(d['same'] for d in dlist)) == 1
     d = OrderedDict([
         ('chrom', dlist[0]['chrom']),
@@ -167,6 +203,9 @@ def collapse(dlist, parent_id, kid_id):
     return d
 
 def enforce_min_sites(cache, min_sites):
+    """Remove blocks with fewer than min_sites informative sites and then
+    merge adjacent blocks in the same state."""
+
     cache = [c for c in cache if c['informative-sites'] >= min_sites]
     if len(cache) < 2: return cache
     icache = [cache[0]]
@@ -413,6 +452,8 @@ def call_all(kept, prefix, min_sites=20):
         sys.stderr.write("install matplotlib and seaborn for plots\n")
         plot = _plot
     for i, f in enumerate(kept):
+        if i % 1000 == 0:
+            print("%d/%d" % (i, len(kept)), file=sys.stderr)
         xos = crossovers(f, fcalls, funfiltered, min_sites)
         plot(xos, f, prefix)
 
@@ -469,7 +510,7 @@ def xplot(xos, fsites, prefix):
     rng = xs[-1] - xs[0]
 
     def fmtr(x, p):
-        if xs[-1] - xs[0] > 3000000:
+        if rng > 3000000:
             v, suf = "%.2f" % (x / 1000000.), "M"
         else:
             v, suf = "%.2f" % (x / 1000.), "K"
