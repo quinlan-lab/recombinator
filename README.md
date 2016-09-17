@@ -57,3 +57,23 @@ points that are likely due to genotyping error.
 
 ![noxo](https://cloud.githubusercontent.com/assets/1739/18555978/19f7dd54-7b27-11e6-8da8-eb749b8093ce.png "No Crossovers")
 
+Cohort Plots and Stats
+======================
+
+Once the recombinator script has run. The `cohort-plots.py` script
+can be run as:
+```
+python cohort-plots.py crossovers.bed $ped $prefix
+```
+and it will output a plot of crossover hot-spots separated by chromosome
+and separating maternal from paternal. E.g.
+
+![hotspots](https://cloud.githubusercontent.com/assets/1739/18605094/d4509d7a-7c45-11e6-94c4-7345ff3c40ce.png "hotspots")
+
+Where we see a nice hotspot from fathers at about 65MB on chromosome 13.
+
+It will also create an aggregate plot with the count of maternal and paternal crossovers:
+
+![sex](https://cloud.githubusercontent.com/assets/1739/18605165/cb82df12-7c47-11e6-80da-0985482de14c.png "sex")
+
+Along with a bed file to stdout with the number of crossovers at each site.

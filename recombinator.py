@@ -46,7 +46,7 @@ def main():
     run(args)
 
 
-def crossovers(f, fhcalls, fhfilt, min_sites=20):
+def crossovers(f, fhcalls, fhunfilt, min_sites=20):
     """
     call the actual crossovers. skip blocks with fewer than min-sites sites and
     then merge the resulting adjacent blocks in the same state
@@ -81,9 +81,9 @@ def crossovers(f, fhcalls, fhfilt, min_sites=20):
     cache = remove_bad_regions(cache)
     cache = enforce_min_sites(cache, 3)
 
-    write_crossovers(cache, fhcalls)
+    write_crossovers(cache, fhunfilt)
     cache = enforce_min_sites(cache, min_sites)
-    return write_crossovers(cache, fhfilt)
+    return write_crossovers(cache, fhcalls)
 
 
 def xmean(x, N):
