@@ -68,12 +68,19 @@ python cohort-plots.py crossovers.bed $ped $prefix
 and it will output a plot of crossover hot-spots separated by chromosome
 and separating maternal from paternal. E.g.
 
-![hotspots](https://cloud.githubusercontent.com/assets/1739/18605094/d4509d7a-7c45-11e6-94c4-7345ff3c40ce.png "hotspots")
+![hotspots](https://cloud.githubusercontent.com/assets/1739/18610633/3b81d9a8-7cde-11e6-813c-9ff3286fce4d.png "hotspots")
 
 Where we see a nice hotspot from fathers at about 65MB on chromosome 13.
+The dashed lines indicate a z-score cutoff of >= 2.58, meaning values above (or below for males) that line
+are above the 99.5% confidence of the data. We do not assume the data is normally distributed, but this makes
+a reasonable cutoff for plotting.
+
+A bed file is sent to stdout with:
++ the number of crossovers at each site
++ the parental sex of 'male', 'female', or 'both' where 'both is the sum of male and female crossovers.
++ the zscore of the number of crossovers.
+It is expected that users will filter this to their own z-score cutoff and sex as needed.
+
 
 It will also create an aggregate plot with the count of maternal and paternal crossovers:
-
 ![sex](https://cloud.githubusercontent.com/assets/1739/18605165/cb82df12-7c47-11e6-80da-0985482de14c.png "sex")
-
-Along with a bed file to stdout with the number of crossovers at each site.
