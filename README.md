@@ -84,3 +84,16 @@ It is expected that users will filter this to their own z-score cutoff and sex a
 
 It will also create an aggregate plot with the count of maternal and paternal crossovers:
 ![sex](https://cloud.githubusercontent.com/assets/1739/18605165/cb82df12-7c47-11e6-80da-0985482de14c.png "sex")
+
+
+Phased vs Unphased
+==================
+
+In our experience, it's not simple to phase large cohorts with available methods. Beagle is quadratic in the
+number of samples and shapeit does not give good results even with strict quality-filtering on input variants.
+
+To get around this, the pipeline we recommend is to run `recombinator` on the unphased VCF. Then, run
+`phased-from-unphased.sh` which will gather any pairs of variants between which there is a state-change.
+It will combine those crossover-bounding variants with the (~2.5 million) omni-2.5 sites, output a with
+only those sites, phase it, and run recombinator.py on the phased.
+
