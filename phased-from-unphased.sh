@@ -29,12 +29,12 @@ extract() {
 }
 export -f extract
 
-ls $prefix/*/*/*{dad,mom}.bed.gz | gargs -s -p 32 "extract {}" | sort -t':' -u -k1,1 -k2,2n > informative.sites
+ls $prefix/*/*/*{dad,mom}.bed.gz | gargs -s -p 32 "extract {}" | sort -t':' -u -k1,1 -k2,2n > $prefix/informative.sites
 
-(cat informative.sites; zcat data/omni-2.5.sites.gz ) | sort -ut':' -k1,1 -k2,2n > all-informative.sites
+(cat $prefix/informative.sites; zcat data/omni-2.5.sites.gz ) | sort -ut':' -k1,1 -k2,2n > $prefix/all-informative.sites
 
 (bcftools view -h $vcf;
-cat all-informative.sites \
+cat $prefix/all-informative.sites \
 	| gargs -s -n 100 -p 20 "bcftools view -H $vcf {}" \
 	| awk '$7 == "PASS" || $7 == "." && $6 > 10' \
 	| awk 'BEGIN{x=0;} $0 ~/^#/{ if(x==0) {print;} next}{x=1; print $0 | "LC_ALL=C sort -u --buffer-size 3G -k1,1 -k2,2n"}' \
@@ -69,8 +69,8 @@ run_shapeit(){
 
 	# convert to phased vcf.
 	shapeit -convert --input-haps \
-           $prefix/shapeit/$chrom.duohmm \
-           --output-vcf $prefix/shapeit/$chrom.phased.vcf \
+		$prefix/shapeit/$chrom.duohmm \
+		--output-vcf $prefix/shapeit/$chrom.phased.vcf \
 	bgzip -f $prefix/shapeit/$chrom.phased.vcf
 	tabix $prefix/shapeit/$chrom.phased.vcf.gz
 
@@ -78,8 +78,8 @@ run_shapeit(){
 		--min-gq 20 \
 		--min-depth 16 \
 		--region $chrom \
-        --vcf $prefix/shapeit/$chrom.phased.vcf.gz \
-        --ped $ped \
+		--vcf $prefix/shapeit/$chrom.phased.vcf.gz \
+		--ped $ped \
 		--prefix $prefix/phased/
 }
 
