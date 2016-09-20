@@ -83,5 +83,8 @@ run_shapeit(){
 		--prefix $prefix/phased/
 }
 
+export -f plinkify
+export -f run_shapeit
+
 seq 1 22 \
 	| gargs -s -p 22 "plinkify {} && run_shapeit {}"
