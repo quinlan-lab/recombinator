@@ -85,6 +85,32 @@ It is expected that users will filter this to their own z-score cutoff and sex a
 It will also create an aggregate plot with the count of maternal and paternal crossovers:
 ![sex](https://cloud.githubusercontent.com/assets/1739/18605165/cb82df12-7c47-11e6-80da-0985482de14c.png "sex")
 
+Enrichment
+==========
+
+After finding per-sample recombination sites, we will want to know if certain events are enriched in those crossovers. For example, we may expect that de novos are more likely to occur in a crossover
+from the same sample.
+We can evaluate this by comparing the observed number of overlaps between crossovers and de novos
+in the same sample Vs the expected, which we derive by shuffling the sample-ids of the crossovers.
+By shuffling the sample ids, we avoid bias due to genome composition at crossovers that would
+come into play if we shuffled the spatial location of the events.
+
+This can be done like this:
+```
+python enrichment.py $crossovers.all-samples.bed denovos.all-samples.bed --simulations 1000
+```
+To compare the sample-overlap in 1000 simulations to the single observed event.
+This assumes that `crossovers.all-samples.bed` and `denovos.all-samples.bed` have a `sample_id`
+column that indicates the sample in which the event occurred.
+
+An example output looks like:
+
+![dnxo](https://cloud.githubusercontent.com/assets/1739/18689543/ee697e62-7f46-11e6-8123-9cd3128fda0d.png "DN::XO")
+
+Where we see that, the observed de-novo::xo overlaps shown as the green line (59) is higher than
+nearly all of the simulated values in blue.
+
+While this example is for de novos, it can be used to compare crossovers to any data where there is per-sample regions.
 
 Phased vs Unphased
 ==================
