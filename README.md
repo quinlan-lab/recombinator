@@ -105,12 +105,12 @@ column that indicates the sample in which the event occurred.
 
 An example output looks like:
 
-![dnxo](https://cloud.githubusercontent.com/assets/1739/18689543/ee697e62-7f46-11e6-8123-9cd3128fda0d.png "DN::XO")
+![dnxo](https://cloud.githubusercontent.com/assets/1739/18727794/a4b475b2-8007-11e6-9b77-85a4918359d1.png "DN::XO")
 
-Where we see that, the observed de-novo::xo overlaps shown as the green line (59) is higher than
+Where we see that, the observed de-novo::xo overlaps shown as the green line (57) is higher than
 nearly all of the simulated values in blue.
 
-While this example is for de novos, it can be used to compare crossovers to any data where there is per-sample regions.
+While this example is for de novos, it can be used to compare crossovers to any data containg regions labelled by sample.
 
 Phased vs Unphased
 ==================
