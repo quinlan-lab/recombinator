@@ -83,7 +83,7 @@ run_shapeit(){
 	# convert to phased vcf.
 	shapeit -convert --input-haps \
 		$prefix/shapeit/$chrom.duohmm \
-		--output-vcf $prefix/shapeit/$chrom.phased.vcf \
+		--output-vcf $prefix/shapeit/$chrom.phased.vcf
 	bgzip -f $prefix/shapeit/$chrom.phased.vcf
 	tabix $prefix/shapeit/$chrom.phased.vcf.gz
 
@@ -100,4 +100,4 @@ export -f plinkify
 export -f run_shapeit
 
 seq 1 22 \
-	| gargs -s -p 22 "plinkify {} && run_shapeit {}"
+	| gargs -p 22 "plinkify {} && run_shapeit {}"

@@ -372,6 +372,7 @@ def run(args):
             if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
                 continue
         if v.call_rate < 0.95: continue
+        if v.FILTER is not None: continue
 
         # expensive to get gt_bases and we only need it at the crossover.
         gt_bases = None
