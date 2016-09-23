@@ -253,10 +253,11 @@ def get_family_dict(fam, smp2idx, args):
     except OSError:
         if not os.path.exists("%s/fam%s" % (args.prefix, sample.family_id)):
             raise
+    # unphased file-handles
     f['fh-dad'] = gzip.open("%s/fam%s/%s.dad.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-mom'] = gzip.open("%s/fam%s/%s.mom.bed.gz" % (args.prefix, sample.family_id, region), "w")
-    f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent_id', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
-    f['fh-mom'].write('\t'.join(['chrom', 'start', 'end', 'parent_id', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+    f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent_id', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+    f['fh-mom'].write('\t'.join(['chrom', 'start', 'end', 'parent_id', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
 
     f['ids'] = [f[s]['id'] for s in ('dad', 'mom', 'template', 'sib')]
 
@@ -270,12 +271,11 @@ def get_family_dict(fam, smp2idx, args):
             sib1_lbl = f['ids'][2] + ("*" if i == 1 else "")
             sib2_lbl = f['ids'][3] + ("*" if i == 2 else "")
 
+            # phased file-handles
             f['fh-%s-%s' % (md, kid)] = gzip.open("%s/fam%s/%s.%s.%s-%s.bed.gz" % (args.prefix, sample.family_id, region, md, p, kid), "w")
 
             f['fh-%s-%s' % (md, kid)].write('\t'.join(['chrom', 'start', 'end',
-                'family_id', 'same', dad_lbl, mom_lbl, sib1_lbl, sib2_lbl,
-                #'global_call_rate', 'global_depth_1_10_50_90'
-                ]) + '\n')
+                'family_id', 'same', dad_lbl, mom_lbl, sib1_lbl, sib2_lbl]) + '\n')
 
     # much faster to index with an array.
     f['idxs'] = np.array([f[s]['idx'] for s in ('dad', 'mom', 'template', 'sib')])
@@ -378,6 +378,7 @@ def run(args):
         gt_bases = None
         gt_types, gt_quals, gt_depths = v.gt_types, v.gt_quals, v.gt_depths
         gt_phases = v.gt_phases
+        pctiles = None
 
         nsites = 0 # track the number of families that had this as an informative site.
         for f in fs:
@@ -391,12 +392,14 @@ def run(args):
 
             add_genotype_info(f, gt_phases=gt_phases)
 
+            # ############## PHASED ####################
             if all(f['gt_phase']):
                 if gt_bases is None:
                     gt_bases = v.gt_bases
 
                 nsites += phased_check(f, v, gt_bases)
                 continue
+            # ############ END PHASED ####################
 
             if not is_informative(f):
                 continue
@@ -416,13 +419,14 @@ def run(args):
                 if gt_bases is None:
                     gt_bases = v.gt_bases
                 fam_bases = "\t".join(gt_bases[f['idxs']])
-                pctiles = "|".join("%.0f" % de for de in
-                        np.percentile(v.gt_depths, (1, 10, 50, 90)))
+                if pctiles is None:
+                    pctiles = "|".join("%.0f" % de for de in
+                            np.percentile(v.gt_depths, (1, 10, 50, 90)))
+                fam_depths = "|".join(map(str, gt_depths[f['idxs']]))
                 nsites += 1
                 val = 1 if f['gt_type'][2] == f['gt_type'][3] else 0
                 f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
-                        f['ids'][p1], f['family_id'], val, fam_bases, "%.2f" %
-                        v.call_rate, pctiles]) + '\n')
+                        f['ids'][p1], f['family_id'], val, fam_bases, fam_depths, "%.2f" % v.call_rate, pctiles]) + '\n')
 
         fsites.write("%s:%d\t%d\n" % (v.CHROM, v.POS, nsites))
         if nsites > 0:
