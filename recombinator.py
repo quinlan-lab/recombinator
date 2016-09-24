@@ -34,6 +34,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--min-depth", dest='min_depth', type=int, default=18)
     p.add_argument("--min-gq", dest='min_gq', type=int, default=20)
+    p.add_argument("--depth-1st-pctile", dest='pctile1', type=int, default=10,
+            help="skip if the 1st pctile of depth across all samples is less than this. removes many spurious xos")
     p.add_argument("--families", default=None, type=str)
     p.add_argument("--ped", required=True)
     p.add_argument("--vcf", required=True)
@@ -337,6 +339,7 @@ def run(args):
     else:
         vcf_iter = vcf
 
+    pctile1 = args.pctile1
     # build a dict of sample_id to sample index
     smp2idx = dict(zip(vcf.samples, range(len(vcf.samples))))
 
@@ -378,10 +381,12 @@ def run(args):
         gt_bases = None
         gt_types, gt_quals, gt_depths = v.gt_types, v.gt_quals, v.gt_depths
         gt_phases = v.gt_phases
-        pctiles = None
+        ipctiles, pctiles = None, None
 
         nsites = 0 # track the number of families that had this as an informative site.
         for f in fs:
+            if ipctiles is not None and ipctiles[0] < pctile1:
+                break
 
             # is_informative only needs gt_types, so we check that first...
             add_genotype_info(f, gt_types=gt_types)
@@ -419,9 +424,16 @@ def run(args):
                 if gt_bases is None:
                     gt_bases = v.gt_bases
                 fam_bases = "\t".join(gt_bases[f['idxs']])
+
+                # calculate on first use. we found that having a low 1st pctile
+                # was a good indicator of increased chance of spurious XO even
+                # in families with decent depth.
                 if pctiles is None:
-                    pctiles = "|".join("%.0f" % de for de in
-                            np.percentile(v.gt_depths, (1, 10, 50, 90)))
+                    ipctiles = np.percentile(v.gt_depths, (1, 10, 50, 90))
+                    pctiles = "|".join("%.0f" % de for de in ipctiles)
+                if ipctiles[0] < pctile1:
+                    break
+
                 fam_depths = "|".join(map(str, gt_depths[f['idxs']]))
                 nsites += 1
                 val = 1 if f['gt_type'][2] == f['gt_type'][3] else 0
