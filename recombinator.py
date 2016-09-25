@@ -398,8 +398,8 @@ def run(args):
                 report_at = 100000
             if i == 100000:
                 report_at = 200000
-            for k in f:
-                if k.startswith('fh'): f[k].flush()
+                for k in f:
+                    if k.startswith('fh'): f[k].flush()
             sys.stderr.flush()
         if v.var_type != 'snp':
             if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
