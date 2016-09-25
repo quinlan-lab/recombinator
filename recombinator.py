@@ -332,16 +332,17 @@ def is_informative(fam):
            (gt_types[0] in (HOM_REF, HOM_ALT) and gt_types[1] == HET)
 
 
-def get_allele_balance(v, has_abs):
-    if has_abs:
+def get_allele_balance(v, has_ab):
+    if has_ab:
         try:
-            sample_abs = v.format("AB", float)
+            sample_abs = v.format("AB")
             return sample_abs
         except KeyError:
             # if "AB" isn't present, use depths directly.
             return None
 
     ad = (v.gt_alt_depths).astype(float)
+    ad[ad < 0] = np.nan
     sample_abs = ad / (ad + v.gt_ref_depths)
     sample_abs[sample_abs < 0] = np.nan
     return sample_abs
@@ -398,8 +399,9 @@ def run(args):
                 report_at = 100000
             if i == 100000:
                 report_at = 200000
-                for k in f:
-                    if k.startswith('fh'): f[k].flush()
+                for f in fs:
+                    for k in f:
+                        if k.startswith('fh'): f[k].flush()
             sys.stderr.flush()
         if v.var_type != 'snp':
             if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
