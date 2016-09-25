@@ -331,6 +331,21 @@ def is_informative(fam):
     return (gt_types[1] in (HOM_ALT, HOM_REF) and gt_types[0] == HET) or \
            (gt_types[0] in (HOM_REF, HOM_ALT) and gt_types[1] == HET)
 
+
+def get_allele_balance(v, has_abs):
+    if has_abs:
+        try:
+            sample_abs = v.format("AB", float)
+            return sample_abs
+        except KeyError:
+            # if "AB" isn't present, use depths directly.
+            return None
+
+    ad = (v.gt_alt_depths).astype(float)
+    sample_abs = ad / (ad + v.gt_ref_depths)
+    sample_abs[sample_abs < 0] = np.nan
+    return sample_abs
+
 def run(args):
     ped = Ped(args.ped)
     vcf = VCF(args.vcf, gts012=True)
@@ -364,6 +379,12 @@ def run(args):
 
     fsites = open("%s.sites" % args.prefix, "w")
     # fcalls contains the crossovers for all samples.
+    try:
+        vcf["AB"]
+        has_abs = True
+    except KeyError:
+        has_abs = False
+
 
     nused, i, report_at, t0 = 0, 0, 10000, time.time()
     for i, v in enumerate(vcf_iter, start=1):
@@ -434,12 +455,9 @@ def run(args):
                 if gt_bases is None:
                     gt_bases = v.gt_bases
                 if sample_abs is None:
-                    try:
-                        sample_abs = v.format("AB", float)
-                        if sample_abs is None: break
-                    except:
-                        # weird variant anyway
-                        break
+                    sample_abs = get_allele_balance(v, has_abs)
+                    if sample_abs is None: break
+
                 fam_abs = sample_abs[f['idxs']]
                 off = 0.31 # require that  off <= alt/(ref+alt) <= 1-off
                 if ((fam_abs[p1] >= 1 - off) | (fam_abs[p1] <= off)): continue
