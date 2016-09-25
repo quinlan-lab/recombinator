@@ -20,6 +20,9 @@ HOM_REF, HET, HOM_ALT, UNKNOWN = range(4)
 def filter_main(argv):
     p = argparse.ArgumentParser()
     p.add_argument("--min-sites", type=int, default=20)
+    # e.g. we have 2 informatives sites at the supposed break-point, but
+    # filtered out a lot of questionable informative sites between them.
+    p.add_argument("--max-intervening", type=int, default=3, help="number of excluded sites inside the actual crossover")
     p.add_argument("--prefix", required=True, help="prefix for output")
     p.add_argument("sites", nargs="+", help=".bed.gz files containing state at each informative site")
 
@@ -28,7 +31,8 @@ def filter_main(argv):
         os.makedirs(os.path.dirname(args.prefix))
     except OSError:
         pass
-    call_all(args.sites, args.prefix, args.min_sites)
+    call_all(args.sites, args.prefix, min_sites=args.min_sites,
+             max_intervening=args.max_intervening)
 
 def main():
     p = argparse.ArgumentParser()
@@ -256,10 +260,13 @@ def get_family_dict(fam, smp2idx, args):
         if not os.path.exists("%s/fam%s" % (args.prefix, sample.family_id)):
             raise
     # unphased file-handles
+    header = ['chrom', 'start', 'end', 'parent_id', 'family_id', 'same',
+              'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate',
+              'global_depth_1_10_50_90', 'family_allele_balance']
     f['fh-dad'] = gzip.open("%s/fam%s/%s.dad.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-mom'] = gzip.open("%s/fam%s/%s.mom.bed.gz" % (args.prefix, sample.family_id, region), "w")
-    f['fh-dad'].write('\t'.join(['chrom', 'start', 'end', 'parent_id', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
-    f['fh-mom'].write('\t'.join(['chrom', 'start', 'end', 'parent_id', 'family_id', 'same', 'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate', 'global_depth_1_10_50_90']) + '\n')
+    f['fh-dad'].write('\t'.join(header) + '\n')
+    f['fh-mom'].write('\t'.join(header) + '\n')
 
     f['ids'] = [f[s]['id'] for s in ('dad', 'mom', 'template', 'sib')]
 
@@ -367,9 +374,11 @@ def run(args):
             if i == 20000:
                 report_at = 40000
             if i == 40000:
-                report_at = 20000
+                report_at = 100000
             if i == 100000:
                 report_at = 200000
+            for k in f:
+                if k.startswith('fh'): f[k].flush()
             sys.stderr.flush()
         if v.var_type != 'snp':
             if len(v.REF) > 3 or len(v.ALT) > 1 or len(v.ALT[0]) > 3:
@@ -382,6 +391,7 @@ def run(args):
         gt_types, gt_quals, gt_depths = v.gt_types, v.gt_quals, v.gt_depths
         gt_phases = v.gt_phases
         ipctiles, pctiles = None, None
+        sample_abs = None
 
         nsites = 0 # track the number of families that had this as an informative site.
         for f in fs:
@@ -423,13 +433,28 @@ def run(args):
 
                 if gt_bases is None:
                     gt_bases = v.gt_bases
+                if sample_abs is None:
+                    try:
+                        sample_abs = v.format("AB", float)
+                        if sample_abs is None: break
+                    except:
+                        # weird variant anyway
+                        break
+                fam_abs = sample_abs[f['idxs']]
+                off = 0.31 # require that  off <= alt/(ref+alt) <= 1-off
+                if ((fam_abs[p1] >= 1 - off) | (fam_abs[p1] <= off)): continue
+                if np.any((1 - off < fam_abs[2:]) | (fam_abs[2:] <= off)): continue
+
+
                 fam_bases = "\t".join(gt_bases[f['idxs']])
+
+                fam_abs = "|".join("%.2f" % val for val in fam_abs)
 
                 # calculate on first use. we found that having a low 1st pctile
                 # was a good indicator of increased chance of spurious XO even
                 # in families with decent depth.
                 if pctiles is None:
-                    ipctiles = np.percentile(v.gt_depths, (1, 10, 50, 90))
+                    ipctiles = np.percentile(gt_depths, (1, 10, 50, 90))
                     pctiles = "|".join("%.0f" % de for de in ipctiles)
                 if ipctiles[0] < pctile1:
                     break
@@ -438,7 +463,8 @@ def run(args):
                 nsites += 1
                 val = 1 if f['gt_type'][2] == f['gt_type'][3] else 0
                 f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
-                        f['ids'][p1], f['family_id'], val, fam_bases, fam_depths, "%.2f" % v.call_rate, pctiles]) + '\n')
+                        f['ids'][p1], f['family_id'], val, fam_bases,
+                        fam_depths, "%.2f" % v.call_rate, pctiles, fam_abs]) + '\n')
 
         fsites.write("%s:%d\t%d\n" % (v.CHROM, v.POS, nsites))
         if nsites > 0:
@@ -452,7 +478,7 @@ def run(args):
     call_all(kept, args.prefix, min_sites=20)
 
 
-def call_all(kept, prefix, min_sites=20):
+def call_all(kept, prefix, min_sites=20, max_intervening=3):
     """
     call all takes the informative sites, calls the crossovers, and makes plots.
     """
@@ -478,8 +504,10 @@ def call_all(kept, prefix, min_sites=20):
     funfiltered.close()
     print("wrote aggregated calls to: %s and %s" % (fcalls.name, funfiltered.name), file=sys.stderr)
 
+
 def _plot(*args, **kwargs):
     pass
+
 
 def rdr(f, ordered=False):
 
@@ -488,12 +516,12 @@ def rdr(f, ordered=False):
     if header[0][0] == "#":
         header[0] = header[0][1:]
 
+    d = OrderedDict if ordered else dict
+
     for toks in (l.rstrip("\r\n").split("\t") for l in fh):
-        if ordered:
-            yield OrderedDict(zip(header, toks))
-        else:
-            yield dict(zip(header, toks))
+        yield d(zip(header, toks))
     fh.close()
+
 
 def xplot(xos, fsites, prefix):
     import matplotlib.pyplot as plt
@@ -576,6 +604,7 @@ def xplot(xos, fsites, prefix):
     plt.savefig(figname)
     plt.close(fig)
 
+
 def _remove_empty(fs):
     # remove empty files.
     kept = []
@@ -595,6 +624,7 @@ def _remove_empty(fs):
                 if not keep:
                     os.unlink(v.name)
     return kept
+
 
 def phased_check(fam, v, gt_bases):
     """
