@@ -32,7 +32,7 @@ def main(args=sys.argv[1:]):
     p.add_argument("--query-key", default="sample_id", help="column-header from query to user for sample")
     p.add_argument("--figure", default="xodn.png", help="path indicating where to save the figure")
     p.add_argument("--simulations", type=int, default=1000, help="number of shufflings to compare to observed")
-    p.add_argument("--extend", type=int, default=10000, help="extend regions on either size by this amount before checking for overlaps.")
+    p.add_argument("--extend", type=int, default=1, help="extend regions on either size by this amount before checking for overlaps.")
     p.add_argument("--size-cutoff", type=int, default=80000, help="exclude regions greater than this length")
 
     p.add_argument("regions", metavar="REGIONS")
@@ -50,30 +50,9 @@ def mktree(iterable, sample_key, size_cutoff):
         T[d['chrom']].add([s, e, d[sample_key]])
     return T
 
-def shuffle(itree, z=[0]):
-    vals = []
-    for k in itree:
-        # shuffle vals across all chroms.
-        vals.extend(v[2] for v in itree[k]._iset)
-    random.shuffle(vals)
-    #rset = list(set(vals))
-    start = 0
-    for k in itree:
-        tree = itree[k]
-        assert isinstance(tree, InterLap)
-        #vals = list(set([v[2] for v in tree._iset]))
-        for i, v in enumerate(tree._iset):
-            tree._iset[i][2] = vals[i + start]
-            #tree._iset[i][2] = random.choice(rset)
-        start += len(tree._iset)
-
-def get_overlap_counts(Q, R, randomize=False, size_cutoff=80000, extend=10000):
+def get_overlap_counts(Q, R, size_cutoff=80000, extend=10000):
     n = 0
     a_pairs, b_pairs = [], []
-    if randomize:
-        R = copy.deepcopy(R)
-        shuffle(R)
-
     for chrom in R:
         seen = InterLap()
         for start, end, sample_id in R[chrom]:
@@ -85,13 +64,6 @@ def get_overlap_counts(Q, R, randomize=False, size_cutoff=80000, extend=10000):
 
             n += int(sample_id in set(q_hits))
     return n, a_pairs, b_pairs
-
-
-def _get_ovl(args):
-    if args[2]:
-        return [get_overlap_counts(*args) for _ in range(10)]
-    else:
-        return get_overlap_counts(*args)
 
 
 def enrichment(regions, query, region_key, query_key, extend=10000,
@@ -125,31 +97,25 @@ def enrichment(regions, query, region_key, query_key, extend=10000,
         np.random.shuffle(a_pairs)
         res.append((a_pairs == b_pairs).sum())
     ngt = sum(r >= obs for r in res)
+
+    p2p5, p50, p97p5 = np.percentile(res, [5, 50, 95])
+
     p = (1.0 + ngt) / float(1 + len(res))
     print(ngt, p)
     print(time.time() - t0)
 
     colors = sns.color_palette()
 
-    """
-    res = []
-    # divide simulations by 10 because we do 10 in _get_ovl to aid
-    # parallelization.
-    with ProcessPoolExecutor() as pool:
-        for r in pool.map(_get_ovl, ((Q, R, True, size_cutoff, extend) for
-            i in range(simulations/10)), chunksize=5):
-            res.extend(r)
-    ngt = sum(r >= obs for r in res)
-    p = (1.0 + ngt) / float(1 + len(res))
-    print(p)
-    """
+    enriched = obs / float(p50)
+    e2p5, e97p5 = obs / float(p2p5), obs / float(p97p5)
 
     fig, ax = plt.subplots(1)
     plt.title("Co-occurrence")
-    ax.hist(res, 25, label="expected")
+    ax.hist(res, min(max(res), 25), label="expected")
     ax.axvline(x=obs, label="observed", color=colors[1], lw=3)
     #ax.text(0.66, 0.92, "p: %.3g (1 + %d) / (1 + %d)" % (p, ngt, len(res)), transform=ax.transAxes)
-    ax.text(0.60, 0.92, "p: %.3g" % (p, ), transform=ax.transAxes)
+    ax.text(0.60, 0.92, "p: %.3g\nFC:%.2f (%.2f-%.2f)"
+            % (p, enriched, e97p5, e2p5), transform=ax.transAxes)
     ax.set_xlabel("Number of overlaps")
     ax.set_ylabel("Count")
     plt.legend(loc='upper left')
