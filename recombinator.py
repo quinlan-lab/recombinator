@@ -32,6 +32,7 @@ def filter_main(argv):
     # filtered out a lot of questionable informative sites between them.
     #p.add_argument("--max-intervening", type=int, default=3, help="number of excluded sites inside the actual crossover")
     p.add_argument("--prefix", required=True, help="prefix for output")
+    p.add_argument("--processes", default=16, help="number of processes")
     p.add_argument("sites", nargs="+", help=".bed.gz files containing state at each informative site")
 
     args = p.parse_args(argv)
@@ -39,7 +40,8 @@ def filter_main(argv):
         os.makedirs(os.path.dirname(args.prefix))
     except OSError:
         pass
-    call_all(args.sites, args.prefix, min_sites=args.min_sites)
+    call_all(args.sites, args.prefix, min_sites=args.min_sites,
+            processes=args.processes)
 
 def main():
     p = argparse.ArgumentParser()
@@ -505,7 +507,7 @@ def run(args):
     call_all(kept, args.prefix, min_sites=20)
 
 
-def call_all(kept, prefix, min_sites=20):
+def call_all(kept, prefix, min_sites=20, processes=1):
     """
     call all takes the informative sites, calls the crossovers, and makes plots.
     """
@@ -514,26 +516,29 @@ def call_all(kept, prefix, min_sites=20):
     fcalls = open("%scrossovers.bed" % iprefix, "w")
     funfiltered = open("%scrossovers-unfiltered.bed" % iprefix, "w")
 
-    try:
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        plot = xplot
-    except ImportError:
-        sys.stderr.write("install matplotlib and seaborn for plots\n")
-        plot = _plot
-    for i, f in enumerate(kept):
-        if i % 1000 == 0:
-            print("%d/%d" % (i, len(kept)), file=sys.stderr)
-        xos = crossovers(f, fcalls, funfiltered, min_sites)
-        plot(xos, f, prefix)
+    pool = None
+    if processes > 1:
+        from concurrent import futures
+        pool = futures.ProcessPoolExecutor(processes)
 
-    fcalls.close();
+    t0, n = time.time(), 1000
+    for i, f in enumerate(kept, start=1):
+        if i % n == 0:
+            persec = n / float(time.time() - t0)
+            t0 = time.time()
+            print("%d/%d (%.3f/sec)" % (i, len(kept), persec), file=sys.stderr)
+        xos = crossovers(f, fcalls, funfiltered, min_sites)
+        if processes == 1:
+            xplot(xos, f, prefix)
+        else:
+            pool.submit(xplot, xos, f, prefix)
+
+    if pool is not None:
+        pool.shutdown()
+
+    fcalls.close()
     funfiltered.close()
     print("wrote aggregated calls to: %s and %s" % (fcalls.name, funfiltered.name), file=sys.stderr)
-
-
-def _plot(*args, **kwargs):
-    pass
 
 
 def rdr(f, ordered=False):
