@@ -102,19 +102,6 @@ def crossovers(f, fhcalls, fhunfilt, prefix, min_sites=20, lock=None):
     xplot(xos, f, prefix)
 
 
-def xmean(x, N):
-    """
-    >>> xmean(np.array([1, 2, 3, 2, 1, 600, 2, 10]), 2)
-    array([   2.        ,    2.33333333,    2.        ,  201.        ,
-            201.        ,  204.        ,    6.        ,   10.        ])
-    """
-
-    res = []
-    for i in range(len(x)):
-        res.append(np.mean(x[i: i+N+1]))
-    res = np.array(res)
-    assert res.shape == x.shape
-    return res
 
 def find_consecutive_low(vals, min_value=5):
     """
@@ -160,9 +147,6 @@ def remove_bad_regions(cache, n=5):
         vals0 = [d['informative-sites'] for d in c0]
         vals1 = [d['informative-sites'] for d in c1]
 
-        #keep0, = np.where(xmean(vals0, 2) >= n)
-        #keep1, = np.where(xmean(vals1, 2) >= n)
-        #keep0, keep1 = set(keep0), set(keep1)
         drop0 = frozenset(find_consecutive_low(vals0, n))
         drop1 = frozenset(find_consecutive_low(vals1, n))
 
