@@ -61,7 +61,7 @@ def main():
     run(args)
 
 
-def crossovers(f, fhcalls, fhunfilt, min_sites=20):
+def crossovers(f, fhcalls, fhunfilt, prefix, min_sites=20, lock=None):
     """
     Call the actual crossovers. Skip blocks with fewer than min-sites sites and
     then merge the resulting adjacent blocks in the same state.
@@ -96,9 +96,10 @@ def crossovers(f, fhcalls, fhunfilt, min_sites=20):
     cache = remove_bad_regions(cache)
     cache = enforce_min_sites(cache, 1)
 
-    write_crossovers(cache, fhunfilt)
+    write_crossovers(cache, fhunfilt, lock)
     cache = enforce_min_sites(cache, min_sites)
-    return write_crossovers(cache, fhcalls)
+    xos = write_crossovers(cache, fhcalls, lock)
+    xplot(xos, f, prefix)
 
 
 def xmean(x, N):
@@ -179,10 +180,13 @@ def remove_bad_regions(cache, n=5):
     return enforce_min_sites(cache, 0)
 
 
-def write_crossovers(cache, fh):
+def write_crossovers(cache, fh, lock=None):
     # now we have starts and ends of the blocks of same state. crossovers occur
     # betwen those blocks.
     if len(cache) < 2: return
+    if lock is not None:
+        fh = open(fh, mode="a")
+        lock.acquire()
     xos = []
     for i in range(len(cache) - 1):
         s, e = cache[i].copy(), cache[i + 1]
@@ -196,6 +200,9 @@ def write_crossovers(cache, fh):
             print("\t".join(s.keys()), file=fh)
         print("\t".join(map(str, s.values())), file=fh)
         xos.append(s)
+    if lock is not None:
+        lock.release()
+        fh.close()
     return xos
 
 
@@ -515,11 +522,21 @@ def call_all(kept, prefix, min_sites=20, processes=1):
 
     fcalls = open("%scrossovers.bed" % iprefix, "w")
     funfiltered = open("%scrossovers-unfiltered.bed" % iprefix, "w")
+    print(fcalls.name)
 
-    pool = None
+    lock, pool = None, None
     if processes > 1:
         from concurrent import futures
+        # note: may want to switch to a different file-lock, but this seems
+        # fine.
+        # http://fasteners.readthedocs.io/en/latest/api/process_lock.html#classes
+        import lockfile
         pool = futures.ProcessPoolExecutor(processes)
+        fcalls.close()
+        funfiltered.close()
+        fcalls = fcalls.name
+        funfiltered = funfiltered.name
+        lock = lockfile.LockFile(fcalls + ".lock")
 
     t0, n = time.time(), 1000
     for i, f in enumerate(kept, start=1):
@@ -527,17 +544,16 @@ def call_all(kept, prefix, min_sites=20, processes=1):
             persec = n / float(time.time() - t0)
             t0 = time.time()
             print("%d/%d (%.3f/sec)" % (i, len(kept), persec), file=sys.stderr)
-        xos = crossovers(f, fcalls, funfiltered, min_sites)
         if processes == 1:
-            xplot(xos, f, prefix)
+            crossovers(f, fcalls, funfiltered, prefix, min_sites, lock)
         else:
-            pool.submit(xplot, xos, f, prefix)
+            pool.submit(crossovers, f, fcalls, funfiltered, prefix, min_sites, lock)
 
     if pool is not None:
         pool.shutdown()
-
-    fcalls.close()
-    funfiltered.close()
+    else:
+        fcalls.close()
+        funfiltered.close()
     print("wrote aggregated calls to: %s and %s" % (fcalls.name, funfiltered.name), file=sys.stderr)
 
 
