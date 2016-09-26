@@ -10,6 +10,14 @@ import gzip
 from collections import defaultdict, OrderedDict
 from operator import itemgetter, attrgetter
 
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib import ticker
+    import seaborn as sns
+    sns.set_style('whitegrid')
+except ImportError:
+    pass
+
 import numpy as np
 from cyvcf2 import VCF
 
@@ -22,7 +30,7 @@ def filter_main(argv):
     p.add_argument("--min-sites", type=int, default=20)
     # e.g. we have 2 informatives sites at the supposed break-point, but
     # filtered out a lot of questionable informative sites between them.
-    p.add_argument("--max-intervening", type=int, default=3, help="number of excluded sites inside the actual crossover")
+    #p.add_argument("--max-intervening", type=int, default=3, help="number of excluded sites inside the actual crossover")
     p.add_argument("--prefix", required=True, help="prefix for output")
     p.add_argument("sites", nargs="+", help=".bed.gz files containing state at each informative site")
 
@@ -31,8 +39,7 @@ def filter_main(argv):
         os.makedirs(os.path.dirname(args.prefix))
     except OSError:
         pass
-    call_all(args.sites, args.prefix, min_sites=args.min_sites,
-             max_intervening=args.max_intervening)
+    call_all(args.sites, args.prefix, min_sites=args.min_sites)
 
 def main():
     p = argparse.ArgumentParser()
@@ -54,8 +61,8 @@ def main():
 
 def crossovers(f, fhcalls, fhunfilt, min_sites=20):
     """
-    call the actual crossovers. skip blocks with fewer than min-sites sites and
-    then merge the resulting adjacent blocks in the same state
+    Call the actual crossovers. Skip blocks with fewer than min-sites sites and
+    then merge the resulting adjacent blocks in the same state.
     """
     fin = gzip.open(f)
     header = next(fin).rstrip().split("\t")
@@ -85,7 +92,7 @@ def crossovers(f, fhcalls, fhunfilt, min_sites=20):
     cache[-1] = collapse(cache[-1], parent_id, kid_id)
     # remove single and double-tons immediately
     cache = remove_bad_regions(cache)
-    cache = enforce_min_sites(cache, 3)
+    cache = enforce_min_sites(cache, 1)
 
     write_crossovers(cache, fhunfilt)
     cache = enforce_min_sites(cache, min_sites)
@@ -153,8 +160,8 @@ def remove_bad_regions(cache, n=5):
         #keep0, = np.where(xmean(vals0, 2) >= n)
         #keep1, = np.where(xmean(vals1, 2) >= n)
         #keep0, keep1 = set(keep0), set(keep1)
-        drop0 = frozenset(find_consecutive_low(vals0))
-        drop1 = frozenset(find_consecutive_low(vals1))
+        drop0 = frozenset(find_consecutive_low(vals0, n))
+        drop1 = frozenset(find_consecutive_low(vals1, n))
 
         cache = [c for i, c in enumerate(c0) if i not in drop0]
         cache += [c for i, c in enumerate(c1) if i not in drop1]
@@ -163,9 +170,9 @@ def remove_bad_regions(cache, n=5):
         # this merges adjacent blocks
         cache = enforce_min_sites(cache, 0)
 
-    vals = [d['informative-sites'] for d in cache]
-    drop = frozenset(find_consecutive_low(vals))
-    cache = [c for i, c in enumerate(cache) if i not in drop]
+    #vals = [d['informative-sites'] for d in cache]
+    #drop = frozenset(find_consecutive_low(vals, n))
+    #cache = [c for i, c in enumerate(cache) if i not in drop]
 
     return enforce_min_sites(cache, 0)
 
@@ -498,7 +505,7 @@ def run(args):
     call_all(kept, args.prefix, min_sites=20)
 
 
-def call_all(kept, prefix, min_sites=20, max_intervening=3):
+def call_all(kept, prefix, min_sites=20):
     """
     call all takes the informative sites, calls the crossovers, and makes plots.
     """
@@ -544,9 +551,6 @@ def rdr(f, ordered=False):
 
 
 def xplot(xos, fsites, prefix):
-    import matplotlib.pyplot as plt
-    from matplotlib import ticker
-    import seaborn as sns
     figname = os.path.basename(fsites).replace(".bed.gz", ".png")
     row = next(rdr(fsites))
     if prefix.endswith(os.path.sep + row['chrom']):
@@ -559,19 +563,20 @@ def xplot(xos, fsites, prefix):
         pass
     figname = os.path.join(d, figname)
 
+    fig, ax = plt.subplots(1, sharex=True, figsize=(7, 2))
 
-    fig, ax = plt.subplots(1, sharex=True, figsize=(12, 4))
-
-    ax.set_title("crossovers")
-    name = fsites.split("/")[-1].rsplit(".", 1)[0]
-    fig.suptitle(name)
+    name = fsites.split("/")[-1].rsplit(".", 2)[0]
 
     xs, ys = [], []
     for row in rdr(fsites):
         xs.append(int(row['start']))
         ys.append(int(row['same']) / 2.0 + 0.25) # 0 -> 0.25, 1 -> 0.75
 
-    ax.plot(xs, ys, 'k.', zorder=5)
+    if name in ('mom', 'dad') or name.endswith((".mom", ".dad")):
+        name += " " + row['parent_id']
+
+    ax.set_title(name)
+    ax.plot(xs, ys, color='k', ls='none', marker='.', markersize=5, zorder=5)
     rng = xs[-1] - xs[0]
 
     def fmtr(x, p):
@@ -593,6 +598,7 @@ def xplot(xos, fsites, prefix):
 
 
     if xos is None:
+        plt.tight_layout()
         plt.savefig(figname)
         plt.close(fig)
         return
@@ -621,6 +627,7 @@ def xplot(xos, fsites, prefix):
     ax.axvspan(xmin=left, xmax=xs[-1],
             ymin=right_state / 2., ymax=(right_state+1) / 2., ec='none')
 
+    plt.tight_layout()
     plt.savefig(figname)
     plt.close(fig)
 
