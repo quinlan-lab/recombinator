@@ -20,36 +20,37 @@ def maxend(fbed):
             continue
     return emax
 
-def main(fbed, ped=None, prefix=None):
-    e = maxend(fbed)
-    d = {'1': np.zeros(e, dtype=np.uint16),
-         '2': np.zeros(e, dtype=np.uint16)}
 
-    lens, last_chrom = [], None
-
+def main(xobeds, ped=None, prefix=None):
     sample_counts = defaultdict(lambda: defaultdict(int))
     sex = {x[1]: x[4] for x in (l.split("\t", 5) for l in open(ped))}
 
-    for i, toks in enumerate(x.rstrip().split("\t") for x in open(fbed)):
-        if i == 0:
-            header = toks
-            parent_id = toks.index('parent_id')
-            continue
-        pid = toks[parent_id]
-        sample_counts[sex[pid]][pid] += 1
+    for xobed in xobeds:
+        lens, last_chrom = [], None
+        e = maxend(xobed)
+        d = {'1': np.zeros(e, dtype=np.uint16),
+             '2': np.zeros(e, dtype=np.uint16)}
 
-        if last_chrom != toks[0]:
-            if last_chrom is not None:
-                report(last_chrom, d, lens, prefix)
-                d['1'][:] = 0
-                d['2'][:] = 0
-            lens = []
-            last_chrom = toks[0]
+        for i, toks in enumerate(x.rstrip().split("\t") for x in open(xobed)):
+            if i == 0:
+                header = toks
+                parent_id = toks.index('parent_id')
+                continue
+            pid = toks[parent_id]
+            sample_counts[sex[pid]][pid] += 1
 
-        s, e = int(toks[1]), int(toks[2])
-        lens.append(e - s)
-        d[sex[pid]][s:e] += 1
-    report(last_chrom, d, lens, prefix)
+            if last_chrom != toks[0]:
+                if last_chrom is not None:
+                    report_xo(last_chrom, d, lens, prefix)
+                    d['1'][:] = 0
+                    d['2'][:] = 0
+                lens = []
+                last_chrom = toks[0]
+
+            s, e = int(toks[1]), int(toks[2])
+            lens.append(e - s)
+            d[sex[pid]][s:e] += 1
+        report_xo(last_chrom, d, lens, prefix)
     plot_sample_counts(sample_counts, prefix)
 
 
@@ -78,7 +79,7 @@ def plot_sample_counts(sample_counts, prefix):
     plt.close()
 
 
-def report(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
+def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
 
     fig, ax = plt.subplots(1, figsize=(12, 3))
     current_palette = sns.color_palette()
@@ -143,7 +144,7 @@ def report(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
 
 if __name__ == "__main__":
     import sys
-    f = sys.argv[1]
-    ped = sys.argv[2]
-    prefix = sys.argv[3]
-    main(f, ped, prefix)
+    ped = sys.argv[1]
+    prefix = sys.argv[2]
+    sample_files = sys.argv[3:]
+    main(sample_files, ped, prefix)
