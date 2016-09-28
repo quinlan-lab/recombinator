@@ -54,7 +54,6 @@ def get_overlap_counts(Q, R, size_cutoff=80000, extend=10000, do_print=False):
     n = 0
     a_pairs, b_pairs = [], []
     for chrom in R:
-        seen = InterLap()
         for start, end, sample_id in R[chrom]:
             if end - start > size_cutoff: continue
 
@@ -65,16 +64,16 @@ def get_overlap_counts(Q, R, size_cutoff=80000, extend=10000, do_print=False):
             if do_print:
                 for st, en, smp in q_hits:
                     if smp != sample_id: continue
-                    print("%s\t%d\t%d\t%s\t%d\t%d" % (chrom,start,end, sample_id, st, end))
+                    print("%s\t%d\t%d\t%s\t%d\t%d" % (chrom, start, end, sample_id, st, end))
 
             n += int(sample_id in set(q_samples))
     return n, a_pairs, b_pairs
 
 
 def enrichment(regions, query, region_key, query_key, extend=10000,
-             simulations=1000,
-             size_cutoff=180000,
-             figpath=None):
+               simulations=1000,
+               size_cutoff=180000,
+               figpath=None):
     R = mktree(regions, region_key, size_cutoff)
     Q = mktree(query, query_key, size_cutoff)
 
