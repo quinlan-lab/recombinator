@@ -50,7 +50,7 @@ def mktree(iterable, sample_key, size_cutoff):
         T[d['chrom']].add([s, e, d[sample_key]])
     return T
 
-def get_overlap_counts(Q, R, size_cutoff=80000, extend=10000):
+def get_overlap_counts(Q, R, size_cutoff=80000, extend=10000, do_print=False):
     n = 0
     a_pairs, b_pairs = [], []
     for chrom in R:
@@ -58,11 +58,16 @@ def get_overlap_counts(Q, R, size_cutoff=80000, extend=10000):
         for start, end, sample_id in R[chrom]:
             if end - start > size_cutoff: continue
 
-            q_hits = [x[2] for x in Q[chrom].find((start - extend, end + extend))]
-            a_pairs.extend([sample_id] * len(q_hits))
-            b_pairs.extend(q_hits)
+            q_hits = list(Q[chrom].find((start - extend, end + extend)))
+            q_samples = [x[2] for x in q_hits]
+            a_pairs.extend([sample_id] * len(q_samples))
+            b_pairs.extend(q_samples)
+            if do_print:
+                for st, en, smp in q_hits:
+                    if smp != sample_id: continue
+                    print("%s\t%d\t%d\t%s\t%d\t%d" % (chrom,start,end, sample_id, st, end))
 
-            n += int(sample_id in set(q_hits))
+            n += int(sample_id in set(q_samples))
     return n, a_pairs, b_pairs
 
 
