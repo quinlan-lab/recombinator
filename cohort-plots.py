@@ -29,19 +29,21 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
     sample_counts = defaultdict(lambda: defaultdict(int))
     sex = {x[1]: x[4] for x in (l.split("\t", 5) for l in open(ped))}
 
-    for xobed in xobeds:
+    fhrates = open("%s.%s-rates.txt" % (prefix, "gc" if blocks else "xo"), "w")
+
+    for xobed in sorted(xobeds):
+        print(xobed)
         lens, last_chrom = [], None
         e = maxend(xobed)
         d = {'1': np.zeros(e, dtype=np.uint16),
              '2': np.zeros(e, dtype=np.uint16)}
 
-        for i, toks in enumerate(x.rstrip().split("\t") for x in open(xobed)):
+        xfh = open(xobed)
+        header = next(xfh).rstrip().split("\t")
+        parent_id = header.index('parent_id')
+        left_block = header.index('left-block')
 
-            if i == 0:
-                header = toks
-                parent_id = toks.index('parent_id')
-                left_block = toks.index('left-block')
-                continue
+        for i, toks in enumerate(sorted(x.rstrip().split("\t") for x in xfh)):
 
             if blocks:
                 se = toks[left_block].split(":")[1].split("-")
@@ -56,9 +58,11 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
 
             if last_chrom != toks[0]:
                 if last_chrom is not None:
-                    report_xo(last_chrom, d, lens, prefix)
-                    d['1'][:] = 0
-                    d['2'][:] = 0
+                    print("switching chrom: %s->%s" % (last_chrom, toks[0]),
+                          file=sys.stderr)
+                    report_xo(last_chrom, d, lens, prefix, file=fhrates)
+                    d = {'1': np.zeros(e, dtype=np.uint16),
+                         '2': np.zeros(e, dtype=np.uint16)}
                 lens = []
                 last_chrom = toks[0]
 
@@ -75,7 +79,7 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
                 lens.append(e - s)
                 d[sex[pid]][s:e] += 1
 
-        report_xo(last_chrom, d, lens, prefix)
+        report_xo(last_chrom, d, lens, prefix, file=fhrates)
     plot_sample_counts(sample_counts, prefix)
 
 
@@ -136,6 +140,9 @@ def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
             ys.extend((vals[0], vals[0]))
             zs.extend((z, z))
 
+        if len(diff) == 0:
+            continue
+
         posn = diff[-1]
         if arr[posn] != 0:
             xs.extend((posn, posn + 1))
@@ -146,7 +153,7 @@ def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
                   arr[posn], sex_label, zscore[posn]), file=file)
 
         if sex_label == "both": break
-        xs, ys, = np.asarray(xs, dtype=int), np.asarray(ys, dtype=int)
+        xs, ys = np.asarray(xs, dtype=int), np.asarray(ys, dtype=int)
         zs = np.asarray(zs)
 
         line = ys[zs > zcutoff].min()
