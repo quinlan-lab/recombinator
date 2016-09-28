@@ -482,6 +482,7 @@ def run(args):
                     if sample_abs is None: break
 
                 fam_abs = sample_abs[f['idxs']]
+                if all(np.isnan(fam_abs)): continue
                 off = 0.31  # require that  off <= alt/(ref+alt) <= 1-off
                 if ((fam_abs[p1] >= 1 - off) | (fam_abs[p1] <= off)): continue
                 if np.any((1 - off < fam_abs[2:]) | (fam_abs[2:] <= off)): continue
