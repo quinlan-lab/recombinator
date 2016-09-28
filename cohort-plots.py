@@ -24,7 +24,8 @@ def maxend(fbed):
     return emax
 
 
-def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint):
+def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
+        blocks=False):
     sample_counts = defaultdict(lambda: defaultdict(int))
     sex = {x[1]: x[4] for x in (l.split("\t", 5) for l in open(ped))}
 
@@ -39,9 +40,14 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint):
             if i == 0:
                 header = toks
                 parent_id = toks.index('parent_id')
+                left_block = toks.index('left-block')
                 continue
 
-            s, e = int(toks[1]), int(toks[2])
+            if blocks:
+                se = toks[left_block].split(":")[1].split("-")
+                s, e = int(se[0]), int(se[1])
+            else:
+                s, e = int(toks[1]), int(toks[2])
             if not (min_size < e - s < max_size):
                 continue
 
@@ -58,6 +64,17 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint):
 
             lens.append(e - s)
             d[sex[pid]][s:e] += 1
+
+        # get the last right block.
+        if blocks and last_chrom is not None:
+            se = toks[header.index('right-block')].split(":")[1].split("-")
+            s, e = int(se[0]), int(se[1])
+            if (min_size < e - s < max_size):
+                sample_counts[sex[pid]][pid] += 1
+                pid = toks[parent_id]
+                lens.append(e - s)
+                d[sex[pid]][s:e] += 1
+
         report_xo(last_chrom, d, lens, prefix)
     plot_sample_counts(sample_counts, prefix)
 
@@ -156,12 +173,13 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ped", required=True, help="ped file")
     p.add_argument("--prefix", required=True, help="where to put images")
-    p.add_argument("--min-size", default=0, type=int, help="minimum crossover size in bases to use")
-    p.add_argument("--max-size", default=10000, type=int, help="maximum crossover size in bases to use")
+    p.add_argument("--blocks", action='store_true', default=False)
+    p.add_argument("--min-size", default=0, type=int, help="mininum crossover size in bases to use.")
+    p.add_argument("--max-size", default=10000, type=int, help="maximum crossover size in bases to use. if --blocks is specified, this si the maximum block-size to use.")
     p.add_argument("crossover_files", nargs="+", help=".crossover.bed files")
     a = p.parse_args()
     run(a.crossover_files, a.ped, a.prefix, min_size=a.min_size,
-        max_size=a.max_size)
+        max_size=a.max_size, blocks=a.blocks)
 
 if __name__ == "__main__":
     main()
