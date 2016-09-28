@@ -20,6 +20,7 @@ except ImportError:
 
 import numpy as np
 from cyvcf2 import VCF
+from intervaltree import IntervalTree
 
 from peddy import Ped
 
@@ -41,17 +42,31 @@ def filter_main(argv):
     except OSError:
         pass
     call_all(args.sites, args.prefix, min_sites=args.min_sites,
-            processes=args.processes)
+             processes=args.processes)
+
+def read_exclude(path):
+    if path is None:
+        return None
+    tree = defaultdict(IntervalTree)
+    for i, line in enumerate((gzip.open if path.endswith(".gz") else open)(path)):
+        toks = line.rstrip().split("\t")
+        # skip header if necessary.
+        if i == 0:
+            try:
+                int(toks[1])
+            except ValueError:
+                continue
+        tree[toks[0]].addi(int(toks[1]), int(toks[2]))
+    return tree
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--min-depth", dest='min_depth', type=int, default=18)
     p.add_argument("--min-gq", dest='min_gq', type=int, default=20)
-    p.add_argument("--depth-1st-pctile", dest='pctile1', type=int, default=10,
-            help="skip if the 1st pctile of depth across all samples is less than this. removes many spurious xos")
     p.add_argument("--families", default=None, type=str)
     p.add_argument("--ped", required=True)
     p.add_argument("--vcf", required=True)
+    p.add_argument("--exclude", help="bed file of regions to exclude (e.g. low-complexity)")
     p.add_argument("--region", help="optional VCF region e.g. '1:1-1000000'")
     p.add_argument("--prefix", required=True, help="prefix for output. files will be prefix.{region}.{family}.{parent}.bed.gz")
     args = p.parse_args()
@@ -359,13 +374,15 @@ def run(args):
 
     samples = [s for s in ped_samples if s in vcf_samples]
 
+    exclude = read_exclude(args.exclude)
+
     vcf = VCF(args.vcf, samples=samples, gts012=True)
     if args.region:
         vcf_iter = vcf(args.region)
     else:
         vcf_iter = vcf
 
-    pctile1 = args.pctile1
+    pctile1 = 10
     # build a dict of sample_id to sample index
     smp2idx = dict(zip(vcf.samples, range(len(vcf.samples))))
 
@@ -395,7 +412,7 @@ def run(args):
         if i % report_at == 0:
             persec = i / float(time.time() - t0)
             print("%s:%d (%.1f/sec) %.2f%% informative (%d/%d variants)" % (v.CHROM, v.POS,
-                persec, 100.0 * nused/i, nused, i), file=sys.stderr)
+                  persec, 100.0 * nused/i, nused, i), file=sys.stderr)
             if i == 20000:
                 report_at = 40000
             if i == 40000:
@@ -411,6 +428,9 @@ def run(args):
                 continue
         if v.call_rate < 0.95: continue
         if v.FILTER is not None: continue
+
+        if exclude is not None and 0 != len(exclude[v.CHROM].search(v.start, v.end)):
+            continue
 
         # expensive to get gt_bases and we only need it at the crossover.
         gt_bases = None
@@ -464,7 +484,7 @@ def run(args):
                     if sample_abs is None: break
 
                 fam_abs = sample_abs[f['idxs']]
-                off = 0.31 # require that  off <= alt/(ref+alt) <= 1-off
+                off = 0.31  # require that  off <= alt/(ref+alt) <= 1-off
                 if ((fam_abs[p1] >= 1 - off) | (fam_abs[p1] <= off)): continue
                 if np.any((1 - off < fam_abs[2:]) | (fam_abs[2:] <= off)): continue
 
@@ -605,7 +625,6 @@ def xplot(xos, fsites, prefix):
     ax.set_xlabel('Genomic Position')
     ax.set_yticks([0.25, 0.75])
     ax.set_yticklabels(["state 0", "state 1"], rotation='vertical')
-
 
     if xos is None:
         plt.tight_layout()
