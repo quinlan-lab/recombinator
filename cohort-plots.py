@@ -18,10 +18,13 @@ def maxend(fbed):
             emax = max(int(toks[2]), emax)
         except ValueError:
             continue
+        except IndexError:
+            print("bad line: %s", toks)
+            continue
     return emax
 
 
-def main(xobeds, ped=None, prefix=None):
+def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint):
     sample_counts = defaultdict(lambda: defaultdict(int))
     sex = {x[1]: x[4] for x in (l.split("\t", 5) for l in open(ped))}
 
@@ -32,10 +35,16 @@ def main(xobeds, ped=None, prefix=None):
              '2': np.zeros(e, dtype=np.uint16)}
 
         for i, toks in enumerate(x.rstrip().split("\t") for x in open(xobed)):
+
             if i == 0:
                 header = toks
                 parent_id = toks.index('parent_id')
                 continue
+
+            s, e = int(toks[1]), int(toks[2])
+            if not (min_size < e - s < max_size):
+                continue
+
             pid = toks[parent_id]
             sample_counts[sex[pid]][pid] += 1
 
@@ -47,7 +56,6 @@ def main(xobeds, ped=None, prefix=None):
                 lens = []
                 last_chrom = toks[0]
 
-            s, e = int(toks[1]), int(toks[2])
             lens.append(e - s)
             d[sex[pid]][s:e] += 1
         report_xo(last_chrom, d, lens, prefix)
@@ -142,9 +150,18 @@ def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
     plt.savefig("%s%s.png" % (prefix.rstrip("."), chrom if prefix.endswith("/") else ("." + chrom)))
     plt.close(fig)
 
-if __name__ == "__main__":
+def main():
     import sys
-    ped = sys.argv[1]
-    prefix = sys.argv[2]
-    sample_files = sys.argv[3:]
-    main(sample_files, ped, prefix)
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--ped", required=True, help="ped file")
+    p.add_argument("--prefix", required=True, help="where to put images")
+    p.add_argument("--min-size", default=0, type=int, help="minimum crossover size in bases to use")
+    p.add_argument("--max-size", default=10000, type=int, help="maximum crossover size in bases to use")
+    p.add_argument("crossover_files", nargs="+", help=".crossover.bed files")
+    a = p.parse_args()
+    run(a.crossover_files, a.ped, a.prefix, min_size=a.min_size,
+        max_size=a.max_size)
+
+if __name__ == "__main__":
+    main()

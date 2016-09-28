@@ -63,7 +63,7 @@ Cohort Plots and Stats
 Once the recombinator script has run. The `cohort-plots.py` script
 can be run as:
 ```
-python cohort-plots.py $ped $prefix crossovers.bed
+python cohort-plots.py --ped $ped --prefix $prefix crossovers.bed
 ```
 and it will output a plot of crossover hot-spots separated by chromosome
 and separating maternal from paternal. E.g.
