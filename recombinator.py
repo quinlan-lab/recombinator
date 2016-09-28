@@ -32,7 +32,7 @@ def filter_main(argv):
     # filtered out a lot of questionable informative sites between them.
     #p.add_argument("--max-intervening", type=int, default=3, help="number of excluded sites inside the actual crossover")
     p.add_argument("--prefix", required=True, help="prefix for output")
-    p.add_argument("--processes", default=16, help="number of processes")
+    p.add_argument("--processes", default=24, help="number of processes")
     p.add_argument("sites", nargs="+", help=".bed.gz files containing state at each informative site")
 
     args = p.parse_args(argv)
@@ -506,7 +506,6 @@ def call_all(kept, prefix, min_sites=20, processes=1):
 
     fcalls = open("%scrossovers.bed" % iprefix, "w")
     funfiltered = open("%scrossovers-unfiltered.bed" % iprefix, "w")
-    print(fcalls.name)
 
     lock, pool = None, None
     if processes > 1:
@@ -535,10 +534,11 @@ def call_all(kept, prefix, min_sites=20, processes=1):
 
     if pool is not None:
         pool.shutdown()
+        print("wrote aggregated calls to: %s and %s" % (fcalls, funfiltered), file=sys.stderr)
     else:
         fcalls.close()
         funfiltered.close()
-    print("wrote aggregated calls to: %s and %s" % (fcalls.name, funfiltered.name), file=sys.stderr)
+        print("wrote aggregated calls to: %s and %s" % (fcalls.name, funfiltered.name), file=sys.stderr)
 
 
 def rdr(f, ordered=False):
