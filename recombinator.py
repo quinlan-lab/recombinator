@@ -82,7 +82,7 @@ def crossovers(f, fhcalls, fhunfilt, prefix, min_sites=20, lock=None):
     then merge the resulting adjacent blocks in the same state.
     """
     fin = gzip.open(f)
-    header = next(fin).rstrip().split("\t")
+    header = next(fin).rstrip().lstrip("#").split("\t")
     ids = [h for h in header if h[-1] == "*"]
     try:
         kid_id = ids[-1].rstrip("*")
@@ -278,7 +278,7 @@ def get_family_dict(fam, smp2idx, args):
         if not os.path.exists("%s/fam%s" % (args.prefix, sample.family_id)):
             raise
     # unphased file-handles
-    header = ['chrom', 'start', 'end', 'parent_id', 'family_id', 'same',
+    header = ['#chrom', 'start', 'end', 'parent_id', 'family_id', 'same',
               'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate',
               'global_depth_1_10_50_90', 'family_allele_balance']
     f['fh-dad'] = gzip.open("%s/fam%s/%s.dad.bed.gz" % (args.prefix, sample.family_id, region), "w")
@@ -301,8 +301,8 @@ def get_family_dict(fam, smp2idx, args):
             # phased file-handles
             f['fh-%s-%s' % (md, kid)] = gzip.open("%s/fam%s/%s.%s.%s-%s.bed.gz" % (args.prefix, sample.family_id, region, md, p, kid), "w")
 
-            f['fh-%s-%s' % (md, kid)].write('\t'.join(['chrom', 'start', 'end',
-                'family_id', 'same', dad_lbl, mom_lbl, sib1_lbl, sib2_lbl]) + '\n')
+            f['fh-%s-%s' % (md, kid)].write('\t'.join(['#chrom', 'start', 'end',
+                'parent_id', 'family_id', 'same', dad_lbl, mom_lbl, sib1_lbl, sib2_lbl]) + '\n')
 
     # much faster to index with an array.
     f['idxs'] = np.array([f[s]['idx'] for s in ('dad', 'mom', 'template', 'sib')])
@@ -445,13 +445,7 @@ def run(args):
                 break
 
             # is_informative only needs gt_types, so we check that first...
-            add_genotype_info(f, gt_types=gt_types)
-
-            # need exactly 1 het parent for both phased an unphased checks.
-            if 1 != ((f['gt_type'][0] == HET) + (f['gt_type'][1] == HET)):
-                continue
-
-            add_genotype_info(f, gt_phases=gt_phases)
+            add_genotype_info(f, gt_types=gt_types, gt_phases=gt_phases)
 
             # ############## PHASED ####################
             if all(f['gt_phase']):
@@ -461,6 +455,10 @@ def run(args):
                 nsites += phased_check(f, v, gt_bases)
                 continue
             # ############ END PHASED ####################
+
+            # need exactly 1 het parent for unphased checks.
+            if 1 != ((f['gt_type'][0] == HET) + (f['gt_type'][1] == HET)):
+                continue
 
             if not is_informative(f):
                 continue
@@ -694,8 +692,7 @@ def phased_check(fam, v, gt_bases):
     used = 0
     for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
         if gt_type[p1] != HET: continue
-        if gt_type[p2] == HET: continue
-        # TODO: add impose_quality_control here.
+        # if gt_type[p2] == HET: continue
 
         fam_bases = [x.split("|") for x in gt_bases[fam['idxs']]]
         vbases = "\t".join(gt_bases[fam['idxs']])
@@ -717,7 +714,7 @@ def phased_check(fam, v, gt_bases):
             kid_id = fam['ids'][kid]
             parent_id = fam['ids'][p1]
             fam['fh-%s-%s' % (parent, kid_id)].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
-                    fam['family_id'], same, vbases
+                    parent_id, fam['family_id'], same, vbases
                     #, "%.2f" % v.call_rate, pctiles
                     ]) + '\n')
     return int(used > 0)
