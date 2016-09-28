@@ -32,7 +32,7 @@ def filter_main(argv):
     # filtered out a lot of questionable informative sites between them.
     #p.add_argument("--max-intervening", type=int, default=3, help="number of excluded sites inside the actual crossover")
     p.add_argument("--prefix", required=True, help="prefix for output")
-    p.add_argument("--processes", default=24, help="number of processes")
+    p.add_argument("-p", "--processes", type=int, default=24, help="number of processes")
     p.add_argument("sites", nargs="+", help=".bed.gz files containing state at each informative site")
 
     args = p.parse_args(argv)
@@ -174,10 +174,13 @@ def write_crossovers(cache, fh, lock=None):
     xos = []
     for i in range(len(cache) - 1):
         s, e = cache[i].copy(), cache[i + 1]
+        s['left-block'] = "{chrom}:{start}-{end}".format(**s)
         st = s.pop('same')
         s['start'] = int(s['end']) - 1
         s['end'] = e['start']
-        s['informative-sites-r'] = e['informative-sites']
+        s['left-informative-sites'] = s.pop('informative-sites')
+        s['right-block'] = "{chrom}:{start}-{end}".format(**e)
+        s['right-informative-sites'] = e['informative-sites']
         s['change'] = "%s-%s" % (st, e['same'])
         if i == 0 and fh.tell() == 0:
             # only write the header for the first round.
@@ -580,6 +583,8 @@ def xplot(xos, fsites, prefix):
     if name in ('mom', 'dad') or name.endswith((".mom", ".dad")):
         name += " " + row['parent_id']
 
+    if not row['family_id'] in name:
+        name += " (family: %s)" % row['family_id']
     ax.set_title(name)
     ax.plot(xs, ys, color='k', ls='none', marker='.', markersize=5, zorder=5)
     rng = xs[-1] - xs[0]
