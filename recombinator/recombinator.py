@@ -23,7 +23,7 @@ except ImportError:
 
 import numpy as np
 from cyvcf2 import VCF
-from intervaltree import IntervalTree
+from quicksect import IntervalTree
 
 from peddy import Ped
 
@@ -47,10 +47,11 @@ def filter_main(argv):
     call_all(args.sites, args.prefix, min_sites=args.min_sites,
              processes=args.processes)
 
-def read_exclude(path):
+def read_exclude(path, chrom=None):
     if path is None:
         return None
     tree = defaultdict(IntervalTree)
+
     for i, line in enumerate((gzip.open if path.endswith(".gz") else open)(path)):
         toks = line.rstrip().split("\t")
         # skip header if necessary.
@@ -59,7 +60,9 @@ def read_exclude(path):
                 int(toks[1])
             except ValueError:
                 continue
-        tree[toks[0]].addi(int(toks[1]), int(toks[2]))
+        if chrom is not None and toks[0] != chrom:
+            continue
+        tree[toks[0]].add(int(toks[1]), int(toks[2]))
     return tree
 
 def main(argv):
