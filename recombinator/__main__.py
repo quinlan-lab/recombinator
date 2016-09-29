@@ -5,6 +5,7 @@ warnings.simplefilter('ignore')
 from . import recombinator
 from . import cohort_plots
 from . import extract_phaseable
+from . import enrichment
 from . import __version__
 
 import sys
@@ -13,7 +14,8 @@ commands = [
         ('recombinator', 'find informative sites and crossovers from a VCF', recombinator.main),
         ('filter', 'call crossovers from informatives sites', recombinator.filter_main),
         ('cohort-plots', 'make plots summarizing crossovers across a cohort', cohort_plots.main),
-        ('extract-phaseable', 'pull high-quality sites from a vcf to phased', extract_phaseable.main),
+        ('phaseable', 'pull high-quality sites from a vcf to phased', extract_phaseable.main),
+        ('enrichment', 'test for enrichment by shuffling labels', enrichment.main),
         ]
 
 def print_commands():

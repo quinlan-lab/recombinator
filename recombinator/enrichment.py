@@ -1,5 +1,5 @@
 """
-Evaluate co-ocurrent between `regions` and `query`
+Evaluate co-ocurrence between `regions` and `query`
 """
 from __future__ import print_function
 
