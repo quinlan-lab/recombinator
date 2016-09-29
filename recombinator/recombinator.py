@@ -59,7 +59,7 @@ def read_exclude(path):
         tree[toks[0]].addi(int(toks[1]), int(toks[2]))
     return tree
 
-def main():
+def main(argv):
     p = argparse.ArgumentParser()
     p.add_argument("--min-depth", dest='min_depth', type=int, default=18)
     p.add_argument("--min-gq", dest='min_gq', type=int, default=20)
@@ -69,7 +69,7 @@ def main():
     p.add_argument("--exclude", help="bed file of regions to exclude (e.g. low-complexity)")
     p.add_argument("--region", help="optional VCF region e.g. '1:1-1000000'")
     p.add_argument("--prefix", required=True, help="prefix for output. files will be prefix.{region}.{family}.{parent}.bed.gz")
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
     if args.region:
         args.prefix = os.path.join(args.prefix, args.region.split(":")[0])
@@ -115,7 +115,6 @@ def crossovers(f, fhcalls, fhunfilt, prefix, min_sites=20, lock=None):
     cache = enforce_min_sites(cache, min_sites)
     xos = write_crossovers(cache, fhcalls, lock)
     xplot(xos, f, prefix)
-
 
 
 def find_consecutive_low(vals, min_value=5):
@@ -726,4 +725,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "filter":
         sys.exit(filter_main(sys.argv[2:]))
 
-    main()
+    main(sys.argv[1:])

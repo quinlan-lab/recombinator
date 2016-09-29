@@ -1,1 +1,11 @@
 intervaltree
+interlap
+toolshed
+numpy
+scipy
+matplotlib
+seaborn
+cyvcf2
+futures
+peddy
+lockfile

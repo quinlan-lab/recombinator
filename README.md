@@ -6,7 +6,8 @@ recombinator
 when run like:
 
 ```
-python recombinator.py \
+python -m recombinator \
+    recombinator \
     --ped $ped \
     --vcf $vcf \
     --region $chrom \
@@ -60,10 +61,10 @@ points that are likely due to genotyping error.
 Cohort Plots and Stats
 ======================
 
-Once the recombinator script has run. The `cohort-plots.py` script
+Once the recombinator script has run. The `cohort-plots` command
 can be run as:
 ```
-python cohort-plots.py --ped $ped --prefix $prefix crossovers.bed
+python -m recombinator cohort-plots --ped $ped --prefix $prefix crossovers.bed
 ```
 and it will output a plot of crossover hot-spots separated by chromosome
 and separating maternal from paternal. E.g.
@@ -97,7 +98,7 @@ come into play if we shuffled the spatial location of the events.
 
 This can be done like this:
 ```
-python enrichment.py $crossovers.all-samples.bed denovos.all-samples.bed --simulations 1000
+python -m recombinator enrichment $crossovers.all-samples.bed denovos.all-samples.bed --simulations 1000
 ```
 To compare the sample-overlap in 1000 simulations to the single observed event.
 This assumes that `crossovers.all-samples.bed` and `denovos.all-samples.bed` have a `sample_id`
@@ -121,5 +122,5 @@ number of samples and shapeit does not give good results even with strict qualit
 To get around this, the pipeline we recommend is to run `recombinator` on the unphased VCF. Then, run
 `phased-from-unphased.sh` which will gather any pairs of variants between which there is a state-change.
 It will combine those crossover-bounding variants with the (~2.5 million) omni-2.5 sites, output a with
-only those sites, phase it, and run recombinator.py on the phased.
+only those sites, phase it, and run recombinator on the phased.
 

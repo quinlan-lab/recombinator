@@ -6,3 +6,8 @@ shapeit*.m*
 *.fam
 results*
 *.vcf.gz
+*.pyc
+*.egg-info
+build/
+dist/
+logs/
