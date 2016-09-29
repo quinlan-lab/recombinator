@@ -7,6 +7,9 @@ from collections import defaultdict
 
 import numpy as np
 from scipy import stats
+import warnings
+
+warnings.simplefilter('ignore')
 from matplotlib import ticker, pyplot as plt
 import seaborn as sns
 sns.set_style('whitegrid')

@@ -9,6 +9,9 @@ import itertools as it
 import gzip
 from collections import defaultdict, OrderedDict
 from operator import itemgetter, attrgetter
+import warnings
+
+warnings.simplefilter('ignore')
 
 try:
     import matplotlib.pyplot as plt
