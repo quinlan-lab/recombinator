@@ -37,6 +37,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         max_mean_depth=400,
         min_allele_balance_p=0.05,
         min_depth_percentile=3,
+        min_qual=1,
         exclude=None,
         HET=1):
     """
@@ -67,15 +68,19 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         if alt_depths is None:
             ref_depths = v.gt_ref_depths
             alt_depths = v.gt_alt_depths
+            alt_depths[alt_depths < 0] = 0
+            ref_depths[ref_depths < 0] = 0
 
         if alt_depths[[mi, di]].sum() > max_alts_in_parents: continue
 
         kid_alt = alt_depths[ki]
         kid_ref = ref_depths[ki]
-        if kid_ref + kid_alt < min_depth: continue
 
-        if ref_depths[di] + alt_depths[di] < min_depth: continue
-        if ref_depths[mi] + alt_depths[mi] < min_depth: continue
+        # depth filtering.
+        if kid_ref + kid_alt < min_depth: continue
+        if ref_depths[di] + alt_depths[di] < min_depth - 1: continue
+        if ref_depths[mi] + alt_depths[mi] < min_depth - 1: continue
+
         if np.mean(alt_depths + ref_depths) > max_mean_depth:
             continue
 
@@ -94,6 +99,9 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         if asum > len(samples) / 10.:
             continue
 
+        # balance evidence in kid and alts in entire cohort.
+        if asum >= kid_alt: continue
+
         # via Tom Sasani.
         palt = ss.binom_test([asum, ref_depths.sum() - kid_ref], p=0.0002,
                 alternative="greater")
@@ -103,7 +111,10 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         if pab < min_allele_balance_p: continue
 
         quals = v.gt_quals
-        if quals[ki] < 0 or quals[mi] < 0 or quals[di] < 0: continue
+        # TODO: check why some quals are 0 and if this reduces overlap with
+        # ruffus.
+        #quals[quals < 0] == 0
+        #if quals[ki] < 1 or quals[mi] < 1 or quals[di] < 1: continue
 
         # stricter settings with FILTER
         if v.FILTER is not None:
@@ -121,8 +132,8 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             ("ref", v.REF),
             ("alt", ",".join(v.ALT)),
             ("filter", v.FILTER or "PASS"),
-            ("pab", pab),
-            ("palt", palt),
+            ("pab", "%.3g" % pab),
+            ("palt", "%.3g" % palt),
             ("paternal_id", kid.paternal_id),
             ("maternal_id", kid.maternal_id),
             ("kid_ref_depth", kid_ref),
@@ -134,6 +145,11 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             ("kid_qual", quals[ki]),
             ("mom_qual", quals[mi]),
             ("dad_qual", quals[di]),
+            ("p%d_depth" % min_depth_percentile, p5),
+            ("depth_mean", "%.1f" % np.mean(ref_depths + alt_depths)),
+            ("depth_std", "%.1f" % np.std(ref_depths + alt_depths)),
+            ("qual_mean", "%.1f" % np.mean(quals)),
+            ("call_rate", "%.3f" % v.call_rate),
             ("cohort_alt_depth", asum),
             )))
 
