@@ -51,7 +51,11 @@ def read_exclude(path, chrom=None):
     if path is None:
         return None
     tree = defaultdict(IntervalTree)
+    # in case they sent a region.
+    if chrom is not None:
+        chrom = chrom.split(":")[0]
 
+    added = 0
     for i, line in enumerate((gzip.open if path.endswith(".gz") else open)(path)):
         toks = line.rstrip().split("\t")
         # skip header if necessary.
@@ -62,7 +66,10 @@ def read_exclude(path, chrom=None):
                 continue
         if chrom is not None and toks[0] != chrom:
             continue
+        added += 1
         tree[toks[0]].add(int(toks[1]), int(toks[2]))
+    if added == 0:
+        sys.stderr.write("didnt add any intervals to exclude for chrom:%s\n" % chrom)
     return tree
 
 def main(argv):

@@ -79,6 +79,8 @@ def run(args):
             persec = i / float(secs)
             print("kept: %d of %d (%.3f%%). %.2f/sec." % (kept, i, 100. * float(kept) / i, persec),
                   file=sys.stderr)
+    secs = time.time() - t0
+    persec = i / float(secs)
     print("kept: %d of %d (%.3f%%). %.2f/sec." % (kept, i, 100. * float(kept) / i, persec),
           file=sys.stderr)
     wtr.close()
