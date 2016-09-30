@@ -9,19 +9,36 @@ from cyvcf2 import VCF, Writer
 import numpy as np
 import scipy.stats as ss
 
+def tranche99(filt, cutoff=99.6):
+    """
+    return True if the tranche is below 99.6
+    VQSRTrancheINDEL90.00to99.00
+    """
+    if filt is None: return True
+    if filt[:4] != "VQSR": return False
+    try:
+        return float(filt.split("to")[1]) < cutoff
+    except:
+        return False
+
+
+
 def variant_prefilter(v, min_variant_qual):
 
     if len(v.REF) > 4: return False
     if len(v.ALT) > 2 or "*" in v.ALT: return False
     if len(v.ALT[0]) > 3: return False
-    if v.FILTER is not None: return False
+    if v.FILTER is not None and not tranche99(v.FILTER) : return False
 
     if v.QUAL < min_variant_qual: return False
     return True
 
 def get_denovo(v, samples, kids, max_alts_in_parents=1,
-        min_depth=8,
-        min_allele_balance_p=0.1,
+        min_depth=5,
+        max_mean_depth=400,
+        min_allele_balance_p=0.05,
+        min_depth_percentile=3,
+        exclude=None,
         HET=1):
     """
     v: cyvcf2.Variant
@@ -31,7 +48,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
     """
 
     if v.num_het > 2: return None
-    if v.num_hom_alt > 2: return None
+    if v.num_hom_alt > 1: return None
 
     ret = []
     gts = v.gt_types
@@ -57,19 +74,30 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
         if ref_depths[di] + alt_depths[di] < min_depth: continue
         if ref_depths[mi] + alt_depths[mi] < min_depth: continue
+        if np.mean(alt_depths + ref_depths) > max_mean_depth:
+            continue
+
+        # require parents and kid to be at least the 5th percentile in the
+        # entire cohort.
+        p5 = np.percentile(ref_depths, min_depth_percentile)
+        if ref_depths[mi] < p5: continue
+        if ref_depths[di] < p5: continue
+        if (alt_depths[ki] + ref_depths[ki]) < p5: continue
 
         # if there are too many alts outside this kid. skip
         asum = alt_depths.sum() - kid_alt
         if asum > len(samples) / 10.:
             continue
 
-        # now do a statistical test for the same thing:
-        palt = ss.binom_test([asum, asum + ref_depths.sum() - kid_ref], p=0.0004,
+
+        # via Tom Sasani.
+        palt = ss.binom_test([asum, ref_depths.sum() - kid_ref], p=0.0002,
                 alternative="greater")
         if palt < min_allele_balance_p: continue
 
         pab = ss.binom_test([kid_ref, kid_alt])
         if pab < min_allele_balance_p: continue
+        quals = v.gt_quals
         ret.append(OrderedDict((
             ("chrom", v.CHROM),
             ("start", v.start),
@@ -78,6 +106,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             ("family_id", kid.family_id),
             ("ref", v.REF),
             ("alt", ",".join(v.ALT)),
+            ("filter", v.FILTER or "PASS"),
             ("pab", pab),
             ("palt", palt),
             ("paternal_id", kid.paternal_id),
@@ -88,8 +117,14 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             ("mom_alt_depth", alt_depths[mi]),
             ("dad_ref_depth", ref_depths[di]),
             ("dad_alt_depth", alt_depths[di]),
+            ("kid_qual", quals[ki]),
+            ("mom_qual", quals[mi]),
+            ("dad_qual", quals[di]),
             ("cohort_alt_depth", asum),
             )))
+
+    if exclude is not None and 0 != len(exclude[v.CHROM].search(v.start, v.end)):
+        return None
 
     # shouldn't have multiple samples with same de novo.
     if len(ret) == 1: return ret[0]
@@ -160,30 +195,36 @@ def run(args):
         samples_lookup = {v: i for i, v in enumerate(vcf.samples)}
         kids = [k for k in ped.samples() if k.mom is not None and k.dad is not None]
 
-    HET = vcf.HET
-    kept = 0
-
+    kept, HET = 0, vcf.HET
     t0 = time.time()
+    n_dn = 0
 
     for i, v in enumerate(vcf(args.chrom) if args.chrom else vcf, start=1):
+        if i % 100000 == 0:
+            secs = time.time() - t0
+            persec = i / float(secs)
+            extra = (" called %d de-novos" % n_dn) if fh_denovos is not None else ""
+            print("kept: %d of %d (%.3f%%). %.2f/sec.%s" % (kept, i,
+                                                            100. * float(kept) / i,
+                                                            persec, extra),
+                  file=sys.stderr)
         if not variant_prefilter(v, 10):
             continue
         if fh_denovos is not None:
-            d = get_denovo(v, samples_lookup, kids, max_alts_in_parents=1)
+            d = get_denovo(v, samples_lookup, kids, max_alts_in_parents=2, exclude=exclude)
             if d is not None:
                 write_denovo(d, fh_denovos)
+                n_dn += 1
 
         if not variant_ok(v, HET, exclude): continue
         wtr.write_record(v)
         kept += 1
-        if i % 100000 == 0:
-            secs = time.time() - t0
-            persec = i / float(secs)
-            print("kept: %d of %d (%.3f%%). %.2f/sec." % (kept, i, 100. * float(kept) / i, persec),
-                  file=sys.stderr)
     secs = time.time() - t0
     persec = i / float(secs)
-    print("kept: %d of %d (%.3f%%). %.2f/sec." % (kept, i, 100. * float(kept) / i, persec),
+    extra = (" called %d de-novos" % n_dn) if fh_denovos is not None else ""
+    print("kept: %d of %d (%.3f%%). %.2f/sec.%s" % (kept, i,
+                                                    100. * float(kept) / i,
+                                                    persec, extra),
           file=sys.stderr)
     wtr.close()
 
