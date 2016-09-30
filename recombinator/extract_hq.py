@@ -22,7 +22,6 @@ def tranche99(filt, cutoff=99.6):
         return False
 
 
-
 def variant_prefilter(v, min_variant_qual):
 
     if len(v.REF) > 4: return False
@@ -45,6 +44,10 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
     samples: dictionary of sample: index in vcf.
     kids: list of peddy.Samples() that have parents
     max_alts_in_parents: max number of alternate reads that can appear in the parents.
+    min_depth: require all members of trio to have at least this depth.
+    min_allele_balance_p: if the p-value for ref, alt counts is less than this, exclude
+    min_depth_percentile: require all members of a trio to be in this percentile of depth.
+    exclude: interval tree of regions to exclude.
     """
 
     if v.num_het > 2: return None
@@ -60,7 +63,6 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         mi, di = samples[kid.mom.sample_id], samples[kid.dad.sample_id]
         for pi in (mi, di):
             if gts[pi] != 0: continue
-
 
         if alt_depths is None:
             ref_depths = v.gt_ref_depths
@@ -89,7 +91,6 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         if asum > len(samples) / 10.:
             continue
 
-
         # via Tom Sasani.
         palt = ss.binom_test([asum, ref_depths.sum() - kid_ref], p=0.0002,
                 alternative="greater")
@@ -97,7 +98,10 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
         pab = ss.binom_test([kid_ref, kid_alt])
         if pab < min_allele_balance_p: continue
+
         quals = v.gt_quals
+        if quals[ki] < 0 or quals[mi] < 0 or quals[di] < 0: continue
+
         ret.append(OrderedDict((
             ("chrom", v.CHROM),
             ("start", v.start),
