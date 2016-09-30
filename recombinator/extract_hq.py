@@ -26,7 +26,7 @@ def variant_prefilter(v, min_variant_qual):
 
     if len(v.REF) > 4: return False
     if len(v.ALT) > 2 or "*" in v.ALT: return False
-    if len(v.ALT[0]) > 3: return False
+    if len(v.ALT[0]) > 6: return False
     if v.FILTER is not None and not tranche99(v.FILTER) : return False
 
     if v.QUAL < min_variant_qual: return False
