@@ -88,6 +88,9 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
         # if there are too many alts outside this kid. skip
         asum = alt_depths.sum() - kid_alt
+
+        # this check is less stringent that the p-value checks below but
+        # avoids some compute.
         if asum > len(samples) / 10.:
             continue
 
@@ -101,6 +104,13 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
         quals = v.gt_quals
         if quals[ki] < 0 or quals[mi] < 0 or quals[di] < 0: continue
+
+        # stricter settings with FILTER
+        if v.FILTER is not None:
+            # fewer than 1 alt per 500-hundred samples.
+            if asum > 0.002 * len(samples): continue
+            # no alts in either parent.
+            if alt_depths[[mi, di]].sum() > 0: continue
 
         ret.append(OrderedDict((
             ("chrom", v.CHROM),
@@ -215,7 +225,7 @@ def run(args):
         if not variant_prefilter(v, 10):
             continue
         if fh_denovos is not None:
-            d = get_denovo(v, samples_lookup, kids, max_alts_in_parents=2, exclude=exclude)
+            d = get_denovo(v, samples_lookup, kids, max_alts_in_parents=1, exclude=exclude)
             if d is not None:
                 write_denovo(d, fh_denovos)
                 n_dn += 1
