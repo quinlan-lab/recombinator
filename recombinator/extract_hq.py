@@ -77,7 +77,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         kid_ref = ref_depths[ki]
 
         # depth filtering.
-        if kid_ref + kid_alt < min_depth: continue
+        if kid_alt + kid_ref < min_depth + 1: continue
         if ref_depths[di] + alt_depths[di] < min_depth - 1: continue
         if ref_depths[mi] + alt_depths[mi] < min_depth - 1: continue
 
@@ -86,17 +86,19 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
         # require parents and kid to be at least the 5th percentile in the
         # entire cohort.
+        """
         p5 = np.percentile(ref_depths, min_depth_percentile)
         if ref_depths[mi] < p5: continue
         if ref_depths[di] < p5: continue
         if (alt_depths[ki] + ref_depths[ki]) < p5: continue
+        """
 
         # if there are too many alts outside this kid. skip
         asum = alt_depths.sum() - kid_alt
 
         # this check is less stringent that the p-value checks below but
         # avoids some compute.
-        if asum > len(samples) / 10.:
+        if asum > len(samples) * 0.01:
             continue
 
         # balance evidence in kid and alts in entire cohort.
@@ -111,8 +113,8 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         if pab < min_allele_balance_p: continue
 
         quals = v.gt_quals
-        # TODO: check why some quals are 0 and if this reduces overlap with
-        # ruffus.
+        # TODO: check why some quals are 0 and if filtering on this improve
+        # accuracy.
         #quals[quals < 0] == 0
         #if quals[ki] < 1 or quals[mi] < 1 or quals[di] < 1: continue
 
@@ -123,7 +125,26 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             # no alts in either parent.
             if alt_depths[[mi, di]].sum() > 0: continue
 
-        ret.append(OrderedDict((
+        ret.append(variant_info(v, kid, samples, pab, palt))
+
+    if exclude is not None and 0 != len(exclude[v.CHROM].search(v.start, v.end)):
+        return None
+
+    # shouldn't have multiple samples with same de novo.
+    if len(ret) == 1: return ret[0]
+
+def variant_info(v, kid, samples, pab=None, palt=None):
+    ref_depths, alt_depths, quals = v.gt_ref_depths, v.gt_alt_depths, v.gt_quals
+    ki, mi, di = samples[kid.sample_id], samples[kid.mom.sample_id], samples[kid.dad.sample_id]
+    kid_ref, kid_alt = ref_depths[ki], alt_depths[ki]
+    asum = alt_depths.sum() - kid_alt
+    if pab is None:
+        pab = ss.binom_test([kid_ref, kid_alt])
+    if palt is None:
+        palt = ss.binom_test([asum, ref_depths.sum() - kid_ref], p=0.0002,
+                alternative="greater")
+
+    return OrderedDict((
             ("chrom", v.CHROM),
             ("start", v.start),
             ("end", v.end),
@@ -145,19 +166,13 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             ("kid_qual", quals[ki]),
             ("mom_qual", quals[mi]),
             ("dad_qual", quals[di]),
-            ("p%d_depth" % min_depth_percentile, p5),
+            #("p%d_depth" % min_depth_percentile, p5),
             ("depth_mean", "%.1f" % np.mean(ref_depths + alt_depths)),
             ("depth_std", "%.1f" % np.std(ref_depths + alt_depths)),
             ("qual_mean", "%.1f" % np.mean(quals)),
             ("call_rate", "%.3f" % v.call_rate),
             ("cohort_alt_depth", asum),
-            )))
-
-    if exclude is not None and 0 != len(exclude[v.CHROM].search(v.start, v.end)):
-        return None
-
-    # shouldn't have multiple samples with same de novo.
-    if len(ret) == 1: return ret[0]
+            ))
 
 def variant_ok(v, HET, exclude=None, min_mean_depth=20, min_pval=0.05, min_variant_qual=30):
     """
