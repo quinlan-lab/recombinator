@@ -94,18 +94,22 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         """
 
         # if there are too many alts outside this kid. skip
-        asum = alt_depths.sum() - kid_alt
+        alt_sum = alt_depths.sum() - kid_alt
+
 
         # this check is less stringent that the p-value checks below but
         # avoids some compute.
-        if asum > len(samples) * 0.01:
+        if alt_sum > len(samples) * 0.01:
             continue
 
         # balance evidence in kid and alts in entire cohort.
-        if asum >= kid_alt: continue
+        if alt_sum >= kid_alt: continue
+
+        if alt_sum > 0:
+            if kid_alt < 6: continue
 
         # via Tom Sasani.
-        palt = ss.binom_test([asum, ref_depths.sum() - kid_ref], p=0.0002,
+        palt = ss.binom_test([alt_sum, ref_depths.sum() - kid_ref], p=0.0002,
                 alternative="greater")
         if palt < min_allele_balance_p: continue
 
@@ -121,7 +125,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         # stricter settings with FILTER
         if v.FILTER is not None:
             # fewer than 1 alt per 500-hundred samples.
-            if asum > 0.002 * len(samples): continue
+            if alt_sum > 0.002 * len(samples): continue
             # no alts in either parent.
             if alt_depths[[mi, di]].sum() > 0: continue
 
@@ -137,11 +141,11 @@ def variant_info(v, kid, samples, pab=None, palt=None):
     ref_depths, alt_depths, quals = v.gt_ref_depths, v.gt_alt_depths, v.gt_quals
     ki, mi, di = samples[kid.sample_id], samples[kid.mom.sample_id], samples[kid.dad.sample_id]
     kid_ref, kid_alt = ref_depths[ki], alt_depths[ki]
-    asum = alt_depths.sum() - kid_alt
+    alt_sum = alt_depths.sum() - kid_alt
     if pab is None:
         pab = ss.binom_test([kid_ref, kid_alt])
     if palt is None:
-        palt = ss.binom_test([asum, ref_depths.sum() - kid_ref], p=0.0002,
+        palt = ss.binom_test([alt_sum, ref_depths.sum() - kid_ref], p=0.0002,
                 alternative="greater")
 
     return OrderedDict((
@@ -171,7 +175,7 @@ def variant_info(v, kid, samples, pab=None, palt=None):
             ("depth_std", "%.1f" % np.std(ref_depths + alt_depths)),
             ("qual_mean", "%.1f" % np.mean(quals)),
             ("call_rate", "%.3f" % v.call_rate),
-            ("cohort_alt_depth", asum),
+            ("cohort_alt_depth", alt_sum),
             ))
 
 def variant_ok(v, HET, exclude=None, min_mean_depth=20, min_pval=0.05, min_variant_qual=30):
@@ -235,7 +239,7 @@ def run(args):
     vcf = VCF(args.vcf, gts012=True, samples=samples)
     wtr = Writer("-", vcf)
 
-    fh_denovos = open(args.denovos, "w") or None
+    fh_denovos = open(args.denovos, "w") if args.denovos else None
     if fh_denovos is not None:
         samples_lookup = {v: i for i, v in enumerate(vcf.samples)}
         kids = [k for k in ped.samples() if k.mom is not None and k.dad is not None]
