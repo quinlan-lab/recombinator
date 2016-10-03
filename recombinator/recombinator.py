@@ -255,6 +255,7 @@ def enforce_min_sites(cache, min_sites):
 
     return icache
 
+
 def get_family_dict(fam, smp2idx, args):
     """
     Hack to just get the VCF idxs for the dad, mom and kids
@@ -335,14 +336,14 @@ def add_genotype_info(fam, gt_types=None,
     if not gt_quals is None:
         fam['gt_qual'] = np.array(gt_quals[fam['idxs']])
 
-def impose_quality_control(fam, args):
+def passes_quality_control(fam, args):
     """
     Make sure the genotype data for the family is up to snuff
     """
-    # NOTE: any is much faster than np.any for small arrays.
     if UNKNOWN in fam['gt_type']:
         return False
 
+    # any is much faster than np.any for small arrays.
     if any(fam['gt_qual'] < args.min_gq):
         return False
 
@@ -478,7 +479,7 @@ def run(args):
             # now wee need to add quality and depth.
             add_genotype_info(f, gt_quals=gt_quals, gt_depths=gt_depths)
 
-            if not impose_quality_control(f, args):
+            if not passes_quality_control(f, args):
                 continue
 
             # detect crossovers.
