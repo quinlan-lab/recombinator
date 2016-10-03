@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
 import warnings
+import sys
 
 warnings.simplefilter('ignore')
 from . import recombinator
@@ -34,6 +35,7 @@ def main():
 
     cmd = next(c for c in commands if c[0] == sys.argv[1])
     cmd[2](sys.argv[2:])
+    sys.stdout.flush()
 
 if __name__ == "__main__":
     main()

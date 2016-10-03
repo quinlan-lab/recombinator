@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function, absolute_import, division
 import sys
 import time
 from collections import OrderedDict
@@ -77,6 +77,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
         # depth filtering.
         if kid_alt + kid_ref < min_depth + 1: continue
+        if kid_alt < min_depth / 2: continue
         if ref_depths[di] + alt_depths[di] < min_depth - 1: continue
         if ref_depths[mi] + alt_depths[mi] < min_depth - 1: continue
 
@@ -193,7 +194,6 @@ def write_denovo(d, fh, _line={}):
         print("#" + "\t".join(d.keys()), file=fh)
     print("\t".join(map(str, d.values())), file=fh)
 
-
 def run(args):
 
     vcf = VCF(args.vcf)
@@ -217,6 +217,7 @@ def run(args):
     for i, v in enumerate(vcf(args.chrom) if args.chrom else vcf, start=1):
         if i % 100000 == 0:
             print(" called %d de-novos out of %d variants" % (n_dn, i), file=sys.stderr)
+            sys.stdout.flush()
 
         d = denovo(v, samples_lookup, kids, max_alts_in_parents=1, exclude=exclude)
         if d is not None:
@@ -224,6 +225,7 @@ def run(args):
             n_dn += 1
 
     print(" called %d de-novos out of %d variants" % (n_dn, i), file=sys.stderr)
+    sys.stdout.flush()
 
 
 def main(argv):
