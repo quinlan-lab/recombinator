@@ -4,6 +4,7 @@ import warnings
 warnings.simplefilter('ignore')
 from . import recombinator
 from . import cohort_plots
+from . import denovo
 from . import extract_hq
 from . import enrichment
 from . import __version__
@@ -15,6 +16,7 @@ commands = [
         ('filter', 'call crossovers from informatives sites', recombinator.filter_main),
         ('cohort-plots', 'make plots summarizing crossovers across a cohort', cohort_plots.main),
         ('extract-hq', 'pull high-quality sites (and de-novos) from a vcf to be phased', extract_hq.main),
+        ('denovos', 'call de novo variants in the cohort', denovo.main),
         ('enrichment', 'test for enrichment by shuffling labels', enrichment.main),
         ]
 
