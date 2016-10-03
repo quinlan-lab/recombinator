@@ -20,8 +20,6 @@ def get_version():
 with open("requirements.txt", "r") as f:
     install_requires = [x.strip() for x in f]
 
-print("RUNNING")
-
 setup(version=get_version(),
       name='recombinator',
       description="find recombinations in families",
