@@ -6,8 +6,8 @@ from cyvcf2 import VCF
 def main(argv):
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--fragment-length", type=int, default=300, help="library fragment length")
-    p.add_argument("--ped-file", help="optional ped file if parents aren't specified in denovo file")
+    p.add_argument("--fragment-length", type=int, default=350, help="library fragment length")
+    p.add_argument("--ped-file", required=True, help="optional ped file if parents aren't specified in denovo file")
     p.add_argument("bed", help="bed file of denovos with a column header for 'chrom,start,end,sample_id")
     p.add_argument("vcf")
     args = p.parse_args(argv)
@@ -16,33 +16,25 @@ def main(argv):
 def run(args):
 
     vcf = VCF(args.vcf, gts012=True)
-
-    if args.ped_file is not None:
-        sample_to_dad = {toks[1]: toks[2] for toks in ts.reader(args.ped_file, header=False)}
-        sample_to_mom = {toks[1]: toks[3] for toks in ts.reader(args.ped_file, header=False)}
-    else:
-        sample_to_mom = None
-        sample_to_dad = None
-
     sample_lookup = {s: i for i, s in enumerate(vcf.samples)}
 
-    for i, d in ts.reader(args.bed, header="ordered"):
+    sample_to_dad = {toks[1]: sample_lookup.get(toks[2]) for toks in ts.reader(args.ped_file, header=False)}
+    sample_to_mom = {toks[1]: sample_lookup.get(toks[3]) for toks in ts.reader(args.ped_file, header=False)}
+
+    for i, d in enumerate(ts.reader(args.bed, header="ordered")):
 
         d['mom-sites'] = []
         d['dad-sites'] = []
 
-        try:
-            idad = sample_lookup[d.get('paternal_id', d.get('dad'))]
-        except KeyError:
-            idad = sample_to_dad[d['sample_id']]
-        try:
-            imom = sample_lookup[d.get('maternal_id', d.get('mom'))]
-        except KeyError:
-            imom = sample_to_mom[d['sample_id']]
-
-        loc = "%s:%d-%d" % (d['chrom'], int(d['start']) + 1 - args.fragment_length, int(d['end'])) + args.fragment_length
+        idad = sample_to_dad[d['sample_id']]
+        imom = sample_to_mom[d['sample_id']]
+        ikid = sample_lookup[d['sample_id']]
+        loc = "%s:%d-%d" % (d['chrom'], int(d['start']) + 1 - args.fragment_length,
+                            int(d['end']) + args.fragment_length)
         for v in vcf(loc):
             gt_types = v.gt_types
+            if gt_types[ikid] != vcf.HET:
+                continue
             if gt_types[idad] == vcf.HET and gt_types[imom] == vcf.HOM_REF:
                 d['dad-sites'].append("%s:%d-%d" % (v.CHROM, v.start+1, v.end))
             elif gt_types[imom] == vcf.HET and gt_types[idad] == vcf.HOM_REF:
