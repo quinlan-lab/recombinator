@@ -4,6 +4,7 @@ import math
 import itertools as it
 import array
 from collections import defaultdict
+import toolshed as ts
 
 import numpy as np
 from scipy import stats
@@ -13,6 +14,23 @@ warnings.simplefilter('ignore')
 from matplotlib import ticker, pyplot as plt
 import seaborn as sns
 sns.set_style('whitegrid')
+
+cytoband_colors = dict(
+    gpos100=(0,0,0),
+    gpos=(0,0,0),
+    gpos75=(100,100,100),
+    gvar=(220,220,220),
+    gpos66=(160,160,160),
+    gpos50=(200,200,200),
+    gpos33=(210,210,210),
+    gpos25=(200,200,200),
+    gneg=(255,255,255),
+    acen=(217,47,39),
+    stalk=(100,127,164),
+)
+
+for k, v in cytoband_colors.items():
+    cytoband_colors[k] = (v[0] / 255., v[1] / 255., v[2] / 255.)
 
 def maxend(fbed):
     emax = 0
@@ -26,11 +44,20 @@ def maxend(fbed):
             continue
     return emax
 
+def read_cytobands(cytobands):
+    icytobands = defaultdict(list)
+    if cytobands is None: return defaultdict(lambda: None)
+    for toks in (l.rstrip().split() for l in ts.nopen(cytobands)):
+        print(toks)
+        chrom = toks[0].replace('chr', '')
+        icytobands[chrom].append((chrom, int(toks[1]), int(toks[2]), cytoband_colors[toks[4]]))
+    return icytobands
 
 def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
-        blocks=False):
+        blocks=False, cytobands=None):
     sample_counts = defaultdict(lambda: defaultdict(int))
     sex = {x[1]: x[4] for x in (l.split("\t", 5) for l in open(ped))}
+    cytobands = read_cytobands(cytobands)
 
     fhrates = open("%s.%s-rates.txt" % (prefix, "gc" if blocks else "xo"), "w")
 
@@ -64,7 +91,7 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
                 if last_chrom is not None:
                     print("switching chrom: %s->%s" % (last_chrom, toks[0]),
                           file=sys.stderr)
-                    report_xo(last_chrom, d, lens, prefix, file=fhrates)
+                    report_xo(last_chrom, d, lens, prefix, file=fhrates, cyto=cytobands[last_chrom])
                     d = {'1': np.zeros(e, dtype=np.uint16),
                          '2': np.zeros(e, dtype=np.uint16)}
                 lens = []
@@ -83,7 +110,7 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
                 lens.append(e - s)
                 d[sex[pid]][s:e] += 1
 
-        report_xo(last_chrom, d, lens, prefix, file=fhrates)
+        report_xo(last_chrom, d, lens, prefix, file=fhrates, cyto=cytobands[last_chrom])
     plot_sample_counts(sample_counts, prefix)
 
 
@@ -112,9 +139,15 @@ def plot_sample_counts(sample_counts, prefix):
     plt.close()
 
 
-def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
+def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58, cyto=None):
 
-    fig, ax = plt.subplots(1, figsize=(12, 3))
+    fig, axes = plt.subplots(3, 1,
+                gridspec_kw={'wspace': 0, 'hspace': 0, 'height_ratios': [15,
+                    0.001 if cyto is None else 1 , 15]},
+                sharex=True)
+    ax = axes[0]
+    plt.subplots_adjust(wspace=0, hspace=0)
+
     current_palette = sns.color_palette()
 
     for k, (sex, sex_label) in enumerate((('1', 'male'), ('2', 'female'), ('3', 'both'))):
@@ -132,6 +165,10 @@ def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
             if i == len(diff) - 1: break
             v = arr[posn]
             if v == 0: continue
+            if posn > 0 and arr[posn-1] == 0:
+                xs.append(posn-1)
+                ys.append(0)
+                zs.append(0)
 
             end = diff[i+1]
             vals = arr[posn:end]
@@ -143,6 +180,10 @@ def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
             xs.extend((posn, end))
             ys.extend((vals[0], vals[0]))
             zs.extend((z, z))
+            if end+1 < len(arr) and arr[end+1] == 0:
+                xs.append(end + 1)
+                ys.append(0)
+                zs.append(0)
 
         if len(diff) == 0:
             continue
@@ -163,16 +204,39 @@ def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
         line = ys[zs > zcutoff].min()
         if k == 0:
             ys, line = -ys, -line
+            ax = axes[2]
+        else:
+            ax = axes[0]
 
         ax.plot(xs, ys, '-', label=sex_label, color=current_palette[k])
         ax.axhline(y=line, ls='--', color='0.4')
 
+    ax = axes[0]
     ax.get_xaxis().set_major_formatter(ticker.FuncFormatter(fmtr))
     ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(absfmtr))
     ax.text(0.015, 0.88, "chromosome: " + chrom, transform=ax.transAxes)
     ax.legend(loc='upper right')
-    ax.set_xlabel('Genomic position')
-    ax.set_ylabel('Samples with crossover', rotation='vertical')
+    axes[1].set_ylabel('Samples with crossover', rotation='vertical')
+    axes[1].yaxis.set_label_position("right")
+
+    axes[2].set_xlabel('Genomic position')
+    plt.draw()
+    vals = ["%.0f" % abs(x.get_position()[1]) for x in axes[2].get_yticklabels()]
+    axes[2].set_yticklabels(vals)
+    axes[2].legend(loc='lower right')
+
+    if cyto:
+        ax = axes[1]
+        for chrom, start, end, color in cyto:
+            ax.axvspan(start, end, facecolor=color, edgecolor=color, lw=0, alpha=0.6)
+        ax.grid(b=False, which='both')
+        sns.despine(ax=axes[1], left=True, right=True)
+    else:
+        sns.despine(ax=axes[0], bottom=True, left=False, right=False, top=False)
+
+    axes[1].set_xticks([])
+    axes[1].set_yticks([])
+    sns.despine(ax=axes[1], top=True, bottom=True)
 
     plt.tight_layout()
     plt.savefig("%s%s.png" % (prefix.rstrip("."), chrom if prefix.endswith("/") else ("." + chrom)))
@@ -186,10 +250,11 @@ def main(args):
     p.add_argument("--blocks", action='store_true', default=False)
     p.add_argument("--min-size", default=0, type=int, help="mininum crossover size in bases to use.")
     p.add_argument("--max-size", default=10000, type=int, help="maximum crossover size in bases to use. if --blocks is specified, this si the maximum block-size to use.")
+    p.add_argument("--cytobands", help="optional file of cytobands to plot")
     p.add_argument("crossover_files", nargs="+", help=".crossover.bed files")
     a = p.parse_args(args)
     run(a.crossover_files, a.ped, a.prefix, min_size=a.min_size,
-        max_size=a.max_size, blocks=a.blocks)
+        max_size=a.max_size, blocks=a.blocks, cytobands=a.cytobands)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
