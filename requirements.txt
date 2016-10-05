@@ -7,5 +7,4 @@ seaborn
 cyvcf2
 futures
 peddy
-lockfile
 quicksect
