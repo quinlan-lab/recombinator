@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function
 import sys
 import toolshed as ts
 from cyvcf2 import VCF
+from .var_info import get_position
 
 def main(argv):
     import argparse
@@ -29,9 +30,7 @@ def run(args):
         idad = sample_to_dad[d['sample_id']]
         imom = sample_to_mom[d['sample_id']]
         ikid = sample_lookup[d['sample_id']]
-        loc = "%s:%d-%d" % (d['chrom'], int(d['start']) + 1 - args.fragment_length,
-                            int(d['end']) + args.fragment_length)
-        for v in vcf(loc):
+        for v in get_position(vcf, d, extra=args.fragment_length):
             gt_types = v.gt_types
             if gt_types[ikid] != vcf.HET:
                 continue

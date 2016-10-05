@@ -54,6 +54,7 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
             else:
                 s, e = int(toks[1]), int(toks[2])
             if not (min_size < e - s < max_size):
+                print("skipping due to size:", e - s)
                 continue
 
             pid = toks[parent_id]

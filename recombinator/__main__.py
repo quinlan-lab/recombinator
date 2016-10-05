@@ -8,6 +8,7 @@ from . import cohort_plots
 from . import denovo
 from . import extract_hq
 from . import enrichment
+from . import var_info
 from . import rbp
 from . import __version__
 
@@ -21,6 +22,7 @@ commands = [
         ('denovos', 'call de novo variants in the cohort', denovo.main),
         ('enrichment', 'test for enrichment by shuffling labels', enrichment.main),
         ('rbp', 'pull out sites that are candidates for read-backed phasing', rbp.main),
+        ('variant-info', 'extract information for all variants in a bed file', var_info.main),
         ]
 
 def print_commands():

@@ -120,14 +120,15 @@ def crossovers(f, fhcalls, fhunfilt, prefix, min_sites=20, plot=True, lock=None)
         last = d['same']
     fin.close()
 
-    cache[-1] = collapse(cache[-1], parent_id, kid_id)
+    if len(cache) > 0:
+        cache[-1] = collapse(cache[-1], parent_id, kid_id)
     # remove single and double-tons immediately
-    cache = remove_bad_regions(cache)
-    cache = enforce_min_sites(cache, 1)
+        cache = remove_bad_regions(cache)
+        cache = enforce_min_sites(cache, 1)
 
-    write_crossovers(cache, fhunfilt, lock)
-    cache = enforce_min_sites(cache, min_sites)
-    xos = write_crossovers(cache, fhcalls, lock)
+        write_crossovers(cache, fhunfilt, lock)
+        cache = enforce_min_sites(cache, min_sites)
+        xos = write_crossovers(cache, fhcalls, lock)
     if plot:
         xplot(xos, f, prefix)
 
@@ -532,6 +533,9 @@ def run(args):
     kept = _remove_empty(fs)
     call_all(kept, args.prefix, min_sites=20)
 
+def iraise(v):
+    if v is not None:
+        raise v
 
 def call_all(kept, prefix, min_sites=20, processes=1, plot=True):
     """
@@ -545,16 +549,11 @@ def call_all(kept, prefix, min_sites=20, processes=1, plot=True):
     lock, pool = None, None
     if processes > 1:
         from concurrent import futures
-        # note: may want to switch to a different file-lock, but this seems
-        # fine.
-        # http://fasteners.readthedocs.io/en/latest/api/process_lock.html#classes
-        #import lockfile
         pool = futures.ProcessPoolExecutor(processes)
         fcalls.close()
         funfiltered.close()
         fcalls = fcalls.name
         funfiltered = funfiltered.name
-        #lock = lockfile.LockFile("/tmp/x.lock", threaded=True)
         from multiprocessing import Manager
         lock = Manager().Lock()
 
@@ -562,7 +561,7 @@ def call_all(kept, prefix, min_sites=20, processes=1, plot=True):
     jobs = []
     for i, f in enumerate(kept, start=1):
         if i % 150 == 0:
-            [j.result() for j in jobs]
+            [iraise(j.exception()) for j in jobs]
             jobs = []
         if i % n == 0:
             persec = n / float(time.time() - t0)
@@ -575,7 +574,7 @@ def call_all(kept, prefix, min_sites=20, processes=1, plot=True):
             jobs.append(pool.submit(crossovers, f, fcalls, funfiltered, prefix, min_sites, plot, lock))
 
     if pool is not None:
-        [j.result() for j in jobs]
+        [iraise(j.exception()) for j in jobs]
         pool.shutdown(wait=True)
         print("wrote aggregated calls to: %s and %s" % (fcalls, funfiltered), file=sys.stderr)
     else:
