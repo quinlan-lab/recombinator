@@ -8,6 +8,7 @@ from . import cohort_plots
 from . import denovo
 from . import extract_hq
 from . import enrichment
+from . import rbp
 from . import __version__
 
 import sys
@@ -19,6 +20,7 @@ commands = [
         ('extract-hq', 'pull high-quality sites (and de-novos) from a vcf to be phased', extract_hq.main),
         ('denovos', 'call de novo variants in the cohort', denovo.main),
         ('enrichment', 'test for enrichment by shuffling labels', enrichment.main),
+        ('rbp', 'pull out sites that are candidates for read-backed phasing', rbp.main),
         ]
 
 def print_commands():

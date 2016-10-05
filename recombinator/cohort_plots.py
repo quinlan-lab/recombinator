@@ -177,8 +177,7 @@ def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58):
     plt.savefig("%s%s.png" % (prefix.rstrip("."), chrom if prefix.endswith("/") else ("." + chrom)))
     plt.close(fig)
 
-def main():
-    import sys
+def main(args):
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("--ped", required=True, help="ped file")
@@ -187,9 +186,9 @@ def main():
     p.add_argument("--min-size", default=0, type=int, help="mininum crossover size in bases to use.")
     p.add_argument("--max-size", default=10000, type=int, help="maximum crossover size in bases to use. if --blocks is specified, this si the maximum block-size to use.")
     p.add_argument("crossover_files", nargs="+", help=".crossover.bed files")
-    a = p.parse_args()
+    a = p.parse_args(args)
     run(a.crossover_files, a.ped, a.prefix, min_size=a.min_size,
         max_size=a.max_size, blocks=a.blocks)
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

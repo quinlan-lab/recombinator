@@ -36,6 +36,7 @@ def filter_main(argv):
     # filtered out a lot of questionable informative sites between them.
     #p.add_argument("--max-intervening", type=int, default=3, help="number of excluded sites inside the actual crossover")
     p.add_argument("--prefix", required=True, help="prefix for output")
+    p.add_argument("--no-plot", dest="plot", action="store_false", default=True, help="dont make per-sample plots")
     p.add_argument("-p", "--processes", type=int, default=24, help="number of processes")
     p.add_argument("sites", nargs="+", help=".bed.gz files containing state at each informative site")
 
@@ -45,7 +46,7 @@ def filter_main(argv):
     except OSError:
         pass
     call_all(args.sites, args.prefix, min_sites=args.min_sites,
-             processes=args.processes)
+             processes=args.processes, plot=args.plot)
 
 def read_exclude(path, chrom=None):
     if path is None:
@@ -89,7 +90,7 @@ def main(argv):
     run(args)
 
 
-def crossovers(f, fhcalls, fhunfilt, prefix, min_sites=20, lock=None):
+def crossovers(f, fhcalls, fhunfilt, prefix, min_sites=20, plot=True, lock=None):
     """
     Call the actual crossovers. Skip blocks with fewer than min-sites sites and
     then merge the resulting adjacent blocks in the same state.
@@ -127,7 +128,8 @@ def crossovers(f, fhcalls, fhunfilt, prefix, min_sites=20, lock=None):
     write_crossovers(cache, fhunfilt, lock)
     cache = enforce_min_sites(cache, min_sites)
     xos = write_crossovers(cache, fhcalls, lock)
-    xplot(xos, f, prefix)
+    if plot:
+        xplot(xos, f, prefix)
 
 
 def find_consecutive_low(vals, min_value=5):
@@ -196,8 +198,8 @@ def write_crossovers(cache, fh, lock=None):
     # betwen those blocks.
     if len(cache) < 2: return
     if lock is not None:
-        fh = open(fh, mode="a")
         lock.acquire()
+        fh = open(fh, mode="a")
     xos = []
     for i in range(len(cache) - 1):
         s, e = cache[i].copy(), cache[i + 1]
@@ -215,8 +217,8 @@ def write_crossovers(cache, fh, lock=None):
         print("\t".join(map(str, s.values())), file=fh)
         xos.append(s)
     if lock is not None:
-        lock.release()
         fh.close()
+        lock.release()
     return xos
 
 
@@ -266,7 +268,7 @@ def get_family_dict(fam, smp2idx, args):
         # NOTE: we currently just pull a single quartet from the family...
         if not sample.sex in ("male", "female"): continue
         kids = [s for s in sample.kids if not None in (s.mom, s.dad)]
-        if len(kids) < 2: continue
+        if len(kids) < 1: continue
 
         key = 'dad' if sample.sex == "male" else 'mom'
         f[key] = {'idx': smp2idx[sample.sample_id], 'id': sample.sample_id}
@@ -420,15 +422,13 @@ def run(args):
         has_abs = False
 
 
-    nused, i, report_at, t0 = 0, 0, 10000, time.time()
+    nused, i, report_at, t0 = 0, 0, 20000, time.time()
     for i, v in enumerate(vcf_iter, start=1):
         if i % report_at == 0:
             persec = i / float(time.time() - t0)
             print("%s:%d (%.1f/sec) %.2f%% informative (%d/%d variants)" % (v.CHROM, v.POS,
                   persec, 100.0 * nused/i, nused, i), file=sys.stderr)
             if i == 20000:
-                report_at = 40000
-            if i == 40000:
                 report_at = 100000
             if i == 100000:
                 report_at = 200000
@@ -533,7 +533,7 @@ def run(args):
     call_all(kept, args.prefix, min_sites=20)
 
 
-def call_all(kept, prefix, min_sites=20, processes=1):
+def call_all(kept, prefix, min_sites=20, processes=1, plot=True):
     """
     call all takes the informative sites, calls the crossovers, and makes plots.
     """
@@ -548,27 +548,35 @@ def call_all(kept, prefix, min_sites=20, processes=1):
         # note: may want to switch to a different file-lock, but this seems
         # fine.
         # http://fasteners.readthedocs.io/en/latest/api/process_lock.html#classes
-        import lockfile
+        #import lockfile
         pool = futures.ProcessPoolExecutor(processes)
         fcalls.close()
         funfiltered.close()
         fcalls = fcalls.name
         funfiltered = funfiltered.name
-        lock = lockfile.LockFile(fcalls + ".lock")
+        #lock = lockfile.LockFile("/tmp/x.lock", threaded=True)
+        from multiprocessing import Manager
+        lock = Manager().Lock()
 
     t0, n = time.time(), 1000
+    jobs = []
     for i, f in enumerate(kept, start=1):
+        if i % 150 == 0:
+            [j.result() for j in jobs]
+            jobs = []
         if i % n == 0:
             persec = n / float(time.time() - t0)
             t0 = time.time()
             print("%d/%d (%.3f/sec)" % (i, len(kept), persec), file=sys.stderr)
         if processes == 1:
-            crossovers(f, fcalls, funfiltered, prefix, min_sites, lock)
+            crossovers(f, fcalls, funfiltered, prefix, min_sites, plot, lock)
         else:
-            pool.submit(crossovers, f, fcalls, funfiltered, prefix, min_sites, lock)
+            f = f
+            jobs.append(pool.submit(crossovers, f, fcalls, funfiltered, prefix, min_sites, plot, lock))
 
     if pool is not None:
-        pool.shutdown()
+        [j.result() for j in jobs]
+        pool.shutdown(wait=True)
         print("wrote aggregated calls to: %s and %s" % (fcalls, funfiltered), file=sys.stderr)
     else:
         fcalls.close()
