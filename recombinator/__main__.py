@@ -9,6 +9,7 @@ from . import denovo
 from . import extract_hq
 from . import enrichment
 from . import var_info
+from . import var_plot
 from . import rbp
 from . import __version__
 
@@ -23,6 +24,7 @@ commands = [
         ('enrichment', 'test for enrichment by shuffling labels', enrichment.main),
         ('rbp', 'pull out sites that are candidates for read-backed phasing', rbp.main),
         ('variant-info', 'extract information for all variants in a bed file', var_info.main),
+        ('variant-plot', 'plot distribution of values for variation-fino', var_plot.main),
         ]
 
 def print_commands():

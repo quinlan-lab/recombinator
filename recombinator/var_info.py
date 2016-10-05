@@ -30,6 +30,7 @@ def run(args):
     ped = Ped(args.ped)
 
     kid_lookup = {s.sample_id: s for s in ped.samples()}
+    skipped, k = 0, 0
 
     for i, d in enumerate(ts.reader(args.bed, header="ordered")):
 
@@ -37,9 +38,14 @@ def run(args):
         kid = kid_lookup[d['sample_id']]
         for v in get_position(vcf, d):
             rec = variant_info(v, kid, sample_lookup)
+        if rec is None:
+            skipped += 1
+            continue
 
-        if i == 0:
-            print("\t".join(rec.keys()))
+
+        if k == 0:
+            print("#" + "\t".join(rec.keys()))
+        k += 1
         print("\t".join(map(str, rec.values())))
 
 if __name__ == "__main__":
