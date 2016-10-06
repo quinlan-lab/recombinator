@@ -55,6 +55,9 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
     ret = []
     gts = v.gt_types
+
+
+
     ref_depths, alt_depths = None, None
     for kid in kids:
         ki = samples[kid.sample_id]
@@ -65,8 +68,12 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             if not (gts[pi] == 0 or gts[pi] == 3): continue
 
         if alt_depths is None:
-            ref_depths = v.gt_ref_depths
-            alt_depths = v.gt_alt_depths
+            depths = v.format('AD', int)
+            ref_depths = depths[:, 0]
+            for k in range(1, depths.shape[1]):
+                alt_depths = depths[:, k]
+            #ref_depths = v.gt_ref_depths
+            #alt_depths = v.gt_alt_depths
             alt_depths[alt_depths < 0] = 0
             ref_depths[ref_depths < 0] = 0
 
