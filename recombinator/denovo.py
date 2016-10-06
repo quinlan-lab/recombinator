@@ -62,7 +62,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         # check that parents are hom-ref
         mi, di = samples[kid.mom.sample_id], samples[kid.dad.sample_id]
         for pi in (mi, di):
-            if gts[pi] != 0: continue
+            if not (gts[pi] == 0 or gts[pi] == 3): continue
 
         if alt_depths is None:
             ref_depths = v.gt_ref_depths

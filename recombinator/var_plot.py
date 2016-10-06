@@ -15,6 +15,20 @@ def main(argv):
     args = p.parse_args(argv)
     run(args)
 
+def sn_to_f(n):
+    """
+    If necessary, convert values represented in scientific
+    notation (but stored as strings) to floats.
+    """
+    last = n.split('e')[1].split('-')[1]
+    first = float(n.split('e')[0])
+    if last[0] == '0':
+        last = int(last[1])
+    else:
+        last = int(last)
+    fl = float(first * (10 ** -last))
+    return fl
+
 def tryfloat(n, log=False, vmax=100):
     try:
         v = float(n)
