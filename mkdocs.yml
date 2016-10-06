@@ -1,0 +1,13 @@
+site_name: recombinator
+site_url: https://github.com/quinlan-lab/recombinator/
+repo_url: https://github.com/quinlan-lab/recombinator/
+pages:
+- Home: index.md
+#- Performance: performance_tips.md
+#- Changes: CHANGES.md
+#- Examples:
+#    - ClinvarExac: examples/clinvar_exac.md
+#    - CADD: examples/cadd.md
+#    - ExAC-Combine: examples/exac_combine/exac_combine.md
+theme: simplex
+
