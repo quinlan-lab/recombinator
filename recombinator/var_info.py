@@ -17,6 +17,13 @@ def main(argv):
 def get_position(vcf, d, ref=None, alt=None, extra=0):
     loc = "%s:%d-%d" % (d['chrom'], int(d['start']) + 1 - extra,
                         int(d['end']) + extra)
+    if ref is None:
+        ref = d.get('ref', d.get('REF'))
+        if "," in ref: ref = None
+    if alt is None:
+        alt = d.get('alt', d.get('ALT'))
+        if "," in alt: alt = None
+
     for v in vcf(loc):
         if ref and v.REF != ref: continue
         if alt and alt not in v.ALT: continue
@@ -37,16 +44,12 @@ def run(args):
         rec = None
         kid = kid_lookup[d['sample_id']]
         for v in get_position(vcf, d):
-            rec = variant_info(v, kid, sample_lookup)
-        if rec is None:
-            skipped += 1
-            continue
+            for rec in variant_info(v, kid, sample_lookup):
 
-
-        if k == 0:
-            print("#" + "\t".join(rec.keys()))
-        k += 1
-        print("\t".join(map(str, rec.values())))
+                if k == 0:
+                    print("#" + "\t".join(rec.keys()))
+                k += 1
+                print("\t".join(map(str, rec.values())))
 
 if __name__ == "__main__":
     if __package__ is None:

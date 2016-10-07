@@ -55,6 +55,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
     ret = []
     gts = v.gt_types
+
     ref_depths, alt_depths = None, None
     for kid in kids:
         ki = samples[kid.sample_id]
@@ -62,11 +63,15 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         # check that parents are hom-ref
         mi, di = samples[kid.mom.sample_id], samples[kid.dad.sample_id]
         for pi in (mi, di):
-            if gts[pi] != 0: continue
+            if not (gts[pi] == 0 or gts[pi] == 3): continue
 
         if alt_depths is None:
-            ref_depths = v.gt_ref_depths
-            alt_depths = v.gt_alt_depths
+            depths = v.format('AD', int)
+            ref_depths = depths[:, 0]
+            for k in range(1, depths.shape[1]):
+                alt_depths = depths[:, k]
+            #ref_depths = v.gt_ref_depths
+            #alt_depths = v.gt_alt_depths
             alt_depths[alt_depths < 0] = 0
             ref_depths[ref_depths < 0] = 0
 
@@ -120,7 +125,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             # no alts in either parent.
             if alt_depths[[mi, di]].sum() > 0: continue
 
-        ret.append(variant_info(v, kid, samples, pab, palt))
+        ret.extend(variant_info(v, kid, samples, pab, palt))
 
     if exclude is not None and 0 != len(exclude[v.CHROM].search(v.start, v.end)):
         return None
@@ -129,24 +134,33 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
     if len(ret) == 1: return ret[0]
 
 def variant_info(v, kid, samples, pab=None, palt=None):
-    ref_depths, alt_depths, quals = v.gt_ref_depths, v.gt_alt_depths, v.gt_quals
-    ki, mi, di = samples[kid.sample_id], samples[kid.mom.sample_id], samples[kid.dad.sample_id]
-    kid_ref, kid_alt = ref_depths[ki], alt_depths[ki]
-    alt_sum = alt_depths.sum() - kid_alt
-    if pab is None:
-        pab = ss.binom_test([kid_ref, kid_alt])
-    if palt is None:
-        palt = ss.binom_test([alt_sum, ref_depths.sum() - kid_ref], p=0.0002,
-                alternative="greater")
 
-    return OrderedDict((
+    quals = v.gt_quals
+    ki, mi, di = samples[kid.sample_id], samples[kid.mom.sample_id], samples[kid.dad.sample_id]
+    depths = v.format('AD', int)
+    ref_depths = depths[:, 0]
+    all_alts = depths[:, 1:]
+    for k in range(all_alts.shape[1]):
+        alt_depths = all_alts[:, k]
+
+    #ref_depths, alt_depths, quals = v.gt_ref_depths, v.gt_alt_depths, v.gt_quals
+        kid_ref, kid_alt = ref_depths[ki], alt_depths[ki]
+        alt_sum = alt_depths.sum() - kid_alt
+        if pab is None:
+            pab = ss.binom_test([kid_ref, kid_alt])
+        if palt is None:
+            palt = ss.binom_test([alt_sum, ref_depths.sum() - kid_ref], p=0.0002,
+                    alternative="greater")
+
+        yield OrderedDict((
             ("chrom", v.CHROM),
             ("start", v.start),
             ("end", v.end),
             ("sample_id", kid.sample_id),
             ("family_id", kid.family_id),
             ("ref", v.REF),
-            ("alt", ",".join(v.ALT)),
+            ("alt", v.ALT[k]),
+            ("alt_i", "%d/%d" % (k, len(v.ALT))),
             ("filter", v.FILTER or "PASS"),
             ("pab", "%.3g" % pab),
             ("palt", "%.3g" % palt),
@@ -154,10 +168,13 @@ def variant_info(v, kid, samples, pab=None, palt=None):
             ("maternal_id", kid.maternal_id),
             ("kid_ref_depth", kid_ref),
             ("kid_alt_depth", kid_alt),
+            ("kid_total_depth", kid_ref + kid_alt),
             ("mom_ref_depth", ref_depths[mi]),
             ("mom_alt_depth", alt_depths[mi]),
+            ("mom_total_depth", ref_depths[mi] + alt_depths[mi]),
             ("dad_ref_depth", ref_depths[di]),
             ("dad_alt_depth", alt_depths[di]),
+            ("dad_total_depth", ref_depths[di] + alt_depths[di]),
             ("kid_qual", quals[ki]),
             ("mom_qual", quals[mi]),
             ("dad_qual", quals[di]),
