@@ -56,8 +56,6 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
     ret = []
     gts = v.gt_types
 
-
-
     ref_depths, alt_depths = None, None
     for kid in kids:
         ki = samples[kid.sample_id]
@@ -136,7 +134,15 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
     if len(ret) == 1: return ret[0]
 
 def variant_info(v, kid, samples, pab=None, palt=None):
-    ref_depths, alt_depths, quals = v.gt_ref_depths, v.gt_alt_depths, v.gt_quals
+
+
+    depths = v.format('AD', int)
+    ref_depths = depths[:, 0]
+    for k in range(1, depths.shape[1]):
+        alt_depths = depths[:, k]
+
+    quals = v.gt_quals
+    #ref_depths, alt_depths, quals = v.gt_ref_depths, v.gt_alt_depths, v.gt_quals
     ki, mi, di = samples[kid.sample_id], samples[kid.mom.sample_id], samples[kid.dad.sample_id]
     kid_ref, kid_alt = ref_depths[ki], alt_depths[ki]
     alt_sum = alt_depths.sum() - kid_alt
@@ -161,10 +167,13 @@ def variant_info(v, kid, samples, pab=None, palt=None):
             ("maternal_id", kid.maternal_id),
             ("kid_ref_depth", kid_ref),
             ("kid_alt_depth", kid_alt),
+            ("kid_total_depth", kid_ref + kid_alt),
             ("mom_ref_depth", ref_depths[mi]),
             ("mom_alt_depth", alt_depths[mi]),
+            ("mom_total_depth", ref_depths[mi] + alt_depths[mi]),
             ("dad_ref_depth", ref_depths[di]),
             ("dad_alt_depth", alt_depths[di]),
+            ("dad_total_depth", ref_depths[di] + alt_depths[di]),
             ("kid_qual", quals[ki]),
             ("mom_qual", quals[mi]),
             ("dad_qual", quals[di]),

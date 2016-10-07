@@ -42,7 +42,6 @@ def run(args):
             skipped += 1
             continue
 
-
         if k == 0:
             print("#" + "\t".join(rec.keys()))
         k += 1
