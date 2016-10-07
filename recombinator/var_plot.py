@@ -12,6 +12,7 @@ def main(argv):
     p.add_argument("--log", type=int, help="log the values.")
     p.add_argument("--column", required=True, help="column to plot")
     p.add_argument("--beds", nargs="+", help="bed file(s) from variant-info or denovo")
+    p.add_argument("--out", default="hist.png",help="Output histogram filename.")
     args = p.parse_args(argv)
     run(args)
 
@@ -29,22 +30,15 @@ def tryfloat(n, log=False, vmax=100):
         return n
 
 def run(args):
-    if len(args.beds) == 1:
-        just_one = True
-    else:
-        just_one = False
+    vals = []
+    labels = []
     for bed in args.beds:
-        vals = []
-        labels = []
         vals.append([tryfloat(d[args.column], args.log) for d in ts.reader(bed)])
         labels.append(basename(bed))
-        if just_one:
-            plt.hist(vals, label=labels, bins=20)
-        elif not just_one:
-            plt.hist(vals, label=labels, alpha=0.5, bins=20)
+    plt.hist(vals, label=labels, bins=20)
     
     plt.legend()
-    plt.savefig("hist.png")
+    plt.savefig(args.out)
 
 if __name__ == "__main__":
     if __package__ is None:
