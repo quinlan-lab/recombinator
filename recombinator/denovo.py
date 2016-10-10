@@ -1,4 +1,5 @@
 from __future__ import print_function, absolute_import, division
+import os
 import sys
 import time
 from collections import OrderedDict
@@ -38,6 +39,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
         min_allele_balance_p=0.05,
         min_qual=1,
         exclude=None,
+        _use_cohort_filters=True,
         HET=1):
     """
     v: cyvcf2.Variant
@@ -48,10 +50,12 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
     min_allele_balance_p: if the p-value for ref, alt counts is less than this, exclude
     min_depth_percentile: require all members of a trio to be in this percentile of depth.
     exclude: interval tree of regions to exclude.
+    _use_cohort_filters: if set to false then only use info within a family to
+    decide if a variant is denovo. don't use things like AF in the cohort.
     """
 
-    if v.num_het > 2: return None
-    if v.num_hom_alt > 1: return None
+    if _use_cohort_filters and v.num_het > 2: return None
+    if _use_cohort_filters and v.num_hom_alt > 1: return None
 
     ret = []
     gts = v.gt_types
@@ -71,7 +75,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             # check that parents are hom-ref
             mi, di = samples[kid.mom.sample_id], samples[kid.dad.sample_id]
             for pi in (mi, di):
-                if not (gts[pi] == 0 or gts[pi] == 3): continue
+                if not (gts[pi] == 0 or gts[pi] == 2): continue
 
             if alt_depths[[mi, di]].sum() > max_alts_in_parents: continue
 
@@ -93,25 +97,25 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
             # this check is less stringent than the p-value checks below but
             # avoids some compute.
-            if alt_sum > len(samples) * 0.01:
+            if _use_cohort_filters and alt_sum > len(samples) * 0.01:
                 continue
 
             # balance evidence in kid and alts in entire cohort.
-            if alt_sum >= kid_alt: continue
+            if _use_cohort_filters and alt_sum >= kid_alt: continue
 
-            if alt_sum > 0:
+            if _use_cohort_filters and alt_sum > 0:
                 if kid_alt < 6: continue
 
             # via Tom Sasani.
             palt = ss.binom_test([alt_sum, ref_depths.sum() - kid_ref], p=0.0002,
                     alternative="greater")
-            if palt < min_allele_balance_p: continue
+            if _use_cohort_filters and palt < min_allele_balance_p: continue
 
             pab = ss.binom_test([kid_ref, kid_alt])
-            if pab < min_allele_balance_p: continue
+            if _use_cohort_filters and pab < min_allele_balance_p: continue
 
-            quals = v.gt_quals
             # TODO: check why some quals are 0 and if filtering on this improve
+            #quals = v.gt_quals
             # accuracy.
             #quals[quals < 0] == 0
             #if quals[ki] < 1 or quals[mi] < 1 or quals[di] < 1: continue
@@ -119,7 +123,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             # stricter settings with FILTER
             if v.FILTER is not None:
                 # fewer than 1 alt per 500-hundred samples.
-                if alt_sum > 0.002 * len(samples): continue
+                if _use_cohort_filters and alt_sum > 0.002 * len(samples): continue
                 # no alts in either parent.
                 if alt_depths[[mi, di]].sum() > 0: continue
 
@@ -194,6 +198,7 @@ def denovo(v, samples, kids, max_alts_in_parents=1,
         min_allele_balance_p=0.05,
         min_depth_percentile=3,
         min_qual=1,
+        _use_cohort_filters=True,
         exclude=None,
         HET=1):
     if not variant_prefilter(v, 10): return None
@@ -203,6 +208,7 @@ def denovo(v, samples, kids, max_alts_in_parents=1,
             min_allele_balance_p=min_allele_balance_p,
             min_qual=min_qual,
             exclude=exclude,
+            _use_cohort_filters=_use_cohort_filters,
             HET=HET)
 
 
@@ -230,20 +236,20 @@ def run(args):
 
     samples_lookup = {v: i for i, v in enumerate(vcf.samples)}
     kids = [k for k in ped.samples() if k.mom is not None and k.dad is not None]
+    _use_cohort_filters = False if os.environ.get("DN_NO_COHORT") else True
 
     n_dn = 0
     for i, v in enumerate(vcf(args.chrom) if args.chrom else vcf, start=1):
         if i % 100000 == 0:
             print(" called %d de-novos out of %d variants" % (n_dn, i), file=sys.stderr)
-            sys.stdout.flush()
 
-        d = denovo(v, samples_lookup, kids, max_alts_in_parents=1, exclude=exclude)
+        d = denovo(v, samples_lookup, kids, max_alts_in_parents=1,
+                exclude=exclude, _use_cohort_filters=_use_cohort_filters)
         if d is not None:
             write_denovo(d, sys.stdout)
             n_dn += 1
 
     print(" called %d de-novos out of %d variants" % (n_dn, i), file=sys.stderr)
-    sys.stdout.flush()
 
 
 def main(argv):
