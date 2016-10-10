@@ -28,7 +28,7 @@ def variant_ok(v, HET, exclude=None, min_mean_depth=20, max_mean_depth=150, min_
     if len(v.ALT) > 1:
         return False
 
-    if v.call_rate < min_call_rate: continue
+    if v.call_rate < min_call_rate: return False
 
     m = np.mean(v.gt_depths)
     if not (min_mean_depth < m < max_mean_depth): return False
