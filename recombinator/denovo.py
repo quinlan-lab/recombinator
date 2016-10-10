@@ -55,85 +55,85 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
     ret = []
     gts = v.gt_types
+    depths = v.format('AD', int)
+    ref_depths = depths[:, 0]
+    ref_depths[ref_depths < 0] = 0
 
-    ref_depths, alt_depths = None, None
-    for kid in kids:
-        ki = samples[kid.sample_id]
-        if gts[ki] != HET: continue
-        # check that parents are hom-ref
-        mi, di = samples[kid.mom.sample_id], samples[kid.dad.sample_id]
-        for pi in (mi, di):
-            if not (gts[pi] == 0 or gts[pi] == 3): continue
+    # loop over alternate alleles
+    for k in range(1, depths.shape[1]):
+        alt_depths = depths[:, k]
+        alt_depths[alt_depths < 0] = 0
 
-        if alt_depths is None:
-            depths = v.format('AD', int)
-            ref_depths = depths[:, 0]
-            for k in range(1, depths.shape[1]):
-                alt_depths = depths[:, k]
-            #ref_depths = v.gt_ref_depths
-            #alt_depths = v.gt_alt_depths
-            alt_depths[alt_depths < 0] = 0
-            ref_depths[ref_depths < 0] = 0
+        # and then loop over the kids.
+        for kid in kids:
+            ki = samples[kid.sample_id]
+            if gts[ki] != HET: continue
+            # check that parents are hom-ref
+            mi, di = samples[kid.mom.sample_id], samples[kid.dad.sample_id]
+            for pi in (mi, di):
+                if not (gts[pi] == 0 or gts[pi] == 3): continue
 
-        if alt_depths[[mi, di]].sum() > max_alts_in_parents: continue
+            if alt_depths[[mi, di]].sum() > max_alts_in_parents: continue
 
-        kid_alt = alt_depths[ki]
-        kid_ref = ref_depths[ki]
+            kid_alt = alt_depths[ki]
+            kid_ref = ref_depths[ki]
 
-        # depth filtering.
-        if kid_alt + kid_ref < min_depth + 1: continue
-        if kid_alt < min_depth / 2: continue
-        if ref_depths[di] + alt_depths[di] < min_depth - 1: continue
-        if ref_depths[mi] + alt_depths[mi] < min_depth - 1: continue
+            # depth filtering.
+            if kid_alt + kid_ref < min_depth + 1: continue
+            if kid_alt < min_depth / 2: continue
+            if ref_depths[di] + alt_depths[di] < min_depth - 1: continue
+            if ref_depths[mi] + alt_depths[mi] < min_depth - 1: continue
 
-        if np.mean(alt_depths + ref_depths) > max_mean_depth:
-            continue
+            if np.mean(alt_depths + ref_depths) > max_mean_depth:
+                continue
 
-        # if there are too many alts outside this kid. skip
-        alt_sum = alt_depths.sum() - kid_alt
+            # if there are too many alts outside this kid. skip
+            alt_sum = alt_depths.sum() - kid_alt
 
 
-        # this check is less stringent that the p-value checks below but
-        # avoids some compute.
-        if alt_sum > len(samples) * 0.01:
-            continue
+            # this check is less stringent than the p-value checks below but
+            # avoids some compute.
+            if alt_sum > len(samples) * 0.01:
+                continue
 
-        # balance evidence in kid and alts in entire cohort.
-        if alt_sum >= kid_alt: continue
+            # balance evidence in kid and alts in entire cohort.
+            if alt_sum >= kid_alt: continue
 
-        if alt_sum > 0:
-            if kid_alt < 6: continue
+            if alt_sum > 0:
+                if kid_alt < 6: continue
 
-        # via Tom Sasani.
-        palt = ss.binom_test([alt_sum, ref_depths.sum() - kid_ref], p=0.0002,
-                alternative="greater")
-        if palt < min_allele_balance_p: continue
+            # via Tom Sasani.
+            palt = ss.binom_test([alt_sum, ref_depths.sum() - kid_ref], p=0.0002,
+                    alternative="greater")
+            if palt < min_allele_balance_p: continue
 
-        pab = ss.binom_test([kid_ref, kid_alt])
-        if pab < min_allele_balance_p: continue
+            pab = ss.binom_test([kid_ref, kid_alt])
+            if pab < min_allele_balance_p: continue
 
-        quals = v.gt_quals
-        # TODO: check why some quals are 0 and if filtering on this improve
-        # accuracy.
-        #quals[quals < 0] == 0
-        #if quals[ki] < 1 or quals[mi] < 1 or quals[di] < 1: continue
+            quals = v.gt_quals
+            # TODO: check why some quals are 0 and if filtering on this improve
+            # accuracy.
+            #quals[quals < 0] == 0
+            #if quals[ki] < 1 or quals[mi] < 1 or quals[di] < 1: continue
 
-        # stricter settings with FILTER
-        if v.FILTER is not None:
-            # fewer than 1 alt per 500-hundred samples.
-            if alt_sum > 0.002 * len(samples): continue
-            # no alts in either parent.
-            if alt_depths[[mi, di]].sum() > 0: continue
+            # stricter settings with FILTER
+            if v.FILTER is not None:
+                # fewer than 1 alt per 500-hundred samples.
+                if alt_sum > 0.002 * len(samples): continue
+                # no alts in either parent.
+                if alt_depths[[mi, di]].sum() > 0: continue
 
-        ret.extend(variant_info(v, kid, samples, pab, palt))
+            ret.extend(variant_info(v, kid, samples, pab, palt, alt_i=k))
 
     if exclude is not None and 0 != len(exclude[v.CHROM].search(v.start, v.end)):
         return None
 
     # shouldn't have multiple samples with same de novo.
+    # TODO: make this a parameter. And/or handle sites where we get denovos from
+    # multiple alts.
     if len(ret) == 1: return ret[0]
 
-def variant_info(v, kid, samples, pab=None, palt=None):
+def variant_info(v, kid, samples, pab=None, palt=None, alt_i=None):
 
     quals = v.gt_quals
     ki, mi, di = samples[kid.sample_id], samples[kid.mom.sample_id], samples[kid.dad.sample_id]
@@ -141,9 +141,10 @@ def variant_info(v, kid, samples, pab=None, palt=None):
     ref_depths = depths[:, 0]
     all_alts = depths[:, 1:]
     for k in range(all_alts.shape[1]):
+        if alt_i is not None and alt_i != (k + 1): continue
         alt_depths = all_alts[:, k]
 
-    #ref_depths, alt_depths, quals = v.gt_ref_depths, v.gt_alt_depths, v.gt_quals
+        #ref_depths, alt_depths, quals = v.gt_ref_depths, v.gt_alt_depths, v.gt_quals
         kid_ref, kid_alt = ref_depths[ki], alt_depths[ki]
         alt_sum = alt_depths.sum() - kid_alt
         if pab is None:
