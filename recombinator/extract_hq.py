@@ -10,18 +10,28 @@ import numpy as np
 import scipy.stats as ss
 from . import denovo
 
-def variant_ok(v, HET, exclude=None, min_mean_depth=20, min_pval=0.05, min_variant_qual=30):
+def variant_ok(v, HET, exclude=None, min_mean_depth=20, max_mean_depth=150, min_pval=0.05,
+        min_variant_qual=30, min_call_rate=0.99):
     """
     returns True if this is a good candidate for phasing.
     exclude should be the interval tree for the chromosome matching the
     variant.
+    Recommended to use LCR:
+    and sedgupds:
+    http://humanparalogy.gs.washington.edu/build37/data/GRCh37GenomicSuperDup.tab
+    with: cat GRCh37GenomicSuperDup.tab | awk '{a=NF-1; if(NR > 1 && $a < 0.02) { print substr($1, 4)"\t"$2"\t"$3  }}'
+    (zcat data/LCR-hs37d5.bed.gz && cat segdup.ltp02.bed) | sort -k1,1 -k2,2n | bedtools merge -i stdin | bgzip -c > data/LCR-and-segdup.bed.gz
+    for exclude.
     """
     if not denovo.variant_prefilter(v, min_variant_qual):
         return False
     if len(v.ALT) > 1:
         return False
 
-    if np.mean(v.gt_depths) < min_mean_depth: return False
+    if v.call_rate < min_call_rate: continue
+
+    m = np.mean(v.gt_depths)
+    if not (min_mean_depth < m < max_mean_depth): return False
 
     hets, = np.where(v.gt_types == HET)
     if len(hets) == 0: return False

@@ -256,6 +256,7 @@ def run(args):
             write_denovo(d, sys.stdout)
             n_dn += 1
 
+    sys.stdout.flush()
     print(" called %d de-novos out of %d variants" % (n_dn, i), file=sys.stderr)
 
 
