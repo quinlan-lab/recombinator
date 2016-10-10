@@ -59,14 +59,13 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
 
     ret = []
     gts = v.gt_types
-    depths = v.format('AD', int)
-    ref_depths = depths[:, 0]
-    ref_depths[ref_depths < 0] = 0
+
+    depths = None
+    ref_depths = None
 
     # loop over alternate alleles
-    for k in range(1, depths.shape[1]):
-        alt_depths = depths[:, k]
-        alt_depths[alt_depths < 0] = 0
+    for k in range(1, len(v.ALT) + 1):
+        alt_depths = None
 
         # and then loop over the kids.
         for kid in kids:
@@ -76,6 +75,14 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             mi, di = samples[kid.mom.sample_id], samples[kid.dad.sample_id]
             for pi in (mi, di):
                 if not (gts[pi] == 0 or gts[pi] == 2): continue
+
+            if depths is None:
+                depths = v.format('AD', int)
+                ref_depths = depths[:, 0]
+                ref_depths[ref_depths < 0] = 0
+            if alt_depths is None:
+                alt_depths = depths[:, k]
+                alt_depths[alt_depths < 0] = 0
 
             if alt_depths[[mi, di]].sum() > max_alts_in_parents: continue
 
@@ -112,7 +119,7 @@ def get_denovo(v, samples, kids, max_alts_in_parents=1,
             if _use_cohort_filters and palt < min_allele_balance_p: continue
 
             pab = ss.binom_test([kid_ref, kid_alt])
-            if _use_cohort_filters and pab < min_allele_balance_p: continue
+            if pab < min_allele_balance_p: continue
 
             # TODO: check why some quals are 0 and if filtering on this improve
             #quals = v.gt_quals

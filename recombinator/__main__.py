@@ -41,7 +41,10 @@ def main():
 
     cmd = next(c for c in commands if c[0] == sys.argv[1])
     cmd[2](sys.argv[2:])
-    sys.stdout.flush()
+    try:  # don't ask. but dont remove.
+        sys.stdout.flush()
+    except IOError:
+        pass
 
 if __name__ == "__main__":
     main()
