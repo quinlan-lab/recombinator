@@ -486,7 +486,7 @@ def run(args):
             # detect crossovers.
             for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
 
-                if not (f['gt_type'][p1] == HET and f['gt_type'][p2] == HOM_REF):
+                if not (f['gt_type'][p1] == HET and f['gt_type'][p2] in (HOM_ALT, HOM_REF)):
                     continue
 
                 if gt_bases is None:
@@ -499,8 +499,8 @@ def run(args):
                 if all(np.isnan(fam_abs)): continue
                 off = 0.31  # require that  off <= alt/(ref+alt) <= 1-off
                 if ((fam_abs[p1] >= 1 - off) | (fam_abs[p1] <= off)): continue
-                if np.any((1 - off < fam_abs[2:]) | (fam_abs[2:] <= off)): continue
-
+                kids_ab = fam_abs[2:]
+                if np.any((1 - off < kids_ab) | (kids_ab <= off)): continue
 
                 fam_bases = "\t".join(gt_bases[f['idxs']])
 
