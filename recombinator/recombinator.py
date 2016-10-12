@@ -295,8 +295,7 @@ def get_family_dict(fam, smp2idx, args):
             raise
     # unphased file-handles
     header = ['#chrom', 'start', 'end', 'parent_id', 'family_id', 'same',
-              'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate',
-              'global_depth_1_10_50_90', 'family_allele_balance']
+              'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate', 'family_allele_balance']
     f['fh-dad'] = gzip.open("%s/fam%s/%s.dad.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-mom'] = gzip.open("%s/fam%s/%s.mom.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-dad'].write('\t'.join(header) + '\n')
@@ -335,9 +334,9 @@ def add_genotype_info(fam, gt_types=None,
     if not gt_types is None:
         fam['gt_type'] = list(gt_types[fam['idxs']])
     if not gt_depths is None:
-        fam['gt_depth'] = np.array(gt_depths[fam['idxs']])
+        fam['gt_depth'] = gt_depths[fam['idxs']]
     if not gt_quals is None:
-        fam['gt_qual'] = np.array(gt_quals[fam['idxs']])
+        fam['gt_qual'] = gt_quals[fam['idxs']]
 
 def passes_quality_control(fam, args):
     """
@@ -398,7 +397,6 @@ def run(args):
     else:
         vcf_iter = vcf
 
-    pctile1 = 10
     # build a dict of sample_id to sample index
     smp2idx = dict(zip(vcf.samples, range(len(vcf.samples))))
 
@@ -423,12 +421,14 @@ def run(args):
         has_abs = False
 
 
+    info = defaultdict(int)
     nused, i, report_at, t0 = 0, 0, 20000, time.time()
     for i, v in enumerate(vcf_iter, start=1):
         if i % report_at == 0:
             persec = i / float(time.time() - t0)
             print("%s:%d (%.1f/sec) %.2f%% informative (%d/%d variants)" % (v.CHROM, v.POS,
                   persec, 100.0 * nused/i, nused, i), file=sys.stderr)
+            print(info, file=sys.stderr)
             if i == 20000:
                 report_at = 100000
             if i == 100000:
@@ -450,38 +450,41 @@ def run(args):
         gt_bases = None
         gt_types, gt_quals, gt_depths = v.gt_types, v.gt_quals, v.gt_depths
         gt_phases = v.gt_phases
-        ipctiles, pctiles = None, None
         sample_abs = None
+        phased = all(gt_phases)
 
         nsites = 0 # track the number of families that had this as an informative site.
         for f in fs:
-            if ipctiles is not None and ipctiles[0] < pctile1:
-                break
-
             # is_informative only needs gt_types, so we check that first...
-            add_genotype_info(f, gt_types=gt_types, gt_phases=gt_phases)
 
             # ############## PHASED ####################
-            if all(f['gt_phase']):
+            if phased:
+                add_genotype_info(f, gt_types=gt_types, gt_phases=gt_phases)
                 if gt_bases is None:
                     gt_bases = v.gt_bases
 
                 nsites += phased_check(f, v, gt_bases)
                 continue
             # ############ END PHASED ####################
+            info['pre'] += 1
 
+            add_genotype_info(f, gt_types=gt_types)
             # need exactly 1 het parent for unphased checks.
-            if 1 != ((f['gt_type'][0] == HET) + (f['gt_type'][1] == HET)):
-                continue
+            # check for common case of all 0's
+            if not any(f['gt_type']): continue
+            info['parents'] += 1
+
 
             if not is_informative(f):
                 continue
+            info['informative'] += 1
 
             # now wee need to add quality and depth.
             add_genotype_info(f, gt_quals=gt_quals, gt_depths=gt_depths)
 
             if not passes_quality_control(f, args):
                 continue
+            info['qc'] += 1
 
             # detect crossovers.
             for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
@@ -489,11 +492,13 @@ def run(args):
                 if not (f['gt_type'][p1] == HET and f['gt_type'][p2] in (HOM_ALT, HOM_REF)):
                     continue
 
+
                 if gt_bases is None:
                     gt_bases = v.gt_bases
                 if sample_abs is None:
                     sample_abs = get_allele_balance(v, has_abs)
                     if sample_abs is None: break
+
 
                 fam_abs = sample_abs[f['idxs']]
                 if all(np.isnan(fam_abs)): continue
@@ -502,25 +507,19 @@ def run(args):
                 kids_ab = fam_abs[2:]
                 if np.any((1 - off < kids_ab) | (kids_ab <= off)): continue
 
+                info['abs'] += 1
+
                 fam_bases = "\t".join(gt_bases[f['idxs']])
 
                 fam_abs = "|".join("%.2f" % val for val in fam_abs)
 
-                # calculate on first use. we found that having a low 1st pctile
-                # was a good indicator of increased chance of spurious XO even
-                # in families with decent depth.
-                if pctiles is None:
-                    ipctiles = np.percentile(gt_depths, (1, 10, 50, 90))
-                    pctiles = "|".join("%.0f" % de for de in ipctiles)
-                if ipctiles[0] < pctile1:
-                    break
 
                 fam_depths = "|".join(map(str, gt_depths[f['idxs']]))
                 nsites += 1
                 val = 1 if f['gt_type'][2] == f['gt_type'][3] else 0
                 f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                         f['ids'][p1], f['family_id'], val, fam_bases,
-                        fam_depths, "%.2f" % v.call_rate, pctiles, fam_abs]) + '\n')
+                        fam_depths, "%.2f" % v.call_rate, fam_abs]) + '\n')
 
         fsites.write("%s:%d\t%d\n" % (v.CHROM, v.POS, nsites))
         if nsites > 0:
@@ -531,7 +530,8 @@ def run(args):
     print("finished at %s:%d (%.1f/sec) %.2f%% informative (%d/%d variants)" % (v.CHROM, v.POS,
         persec, 100.0 * nused/i, nused, i), file=sys.stderr)
     kept = _remove_empty(fs)
-    call_all(kept, args.prefix, min_sites=20)
+    if not ":" in args.region:
+        call_all(kept, args.prefix, min_sites=20)
 
 def iraise(v):
     if v is not None:
@@ -736,7 +736,7 @@ def phased_check(fam, v, gt_bases):
             parent_id = fam['ids'][p1]
             fam['fh-%s-%s' % (parent, kid_id)].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                     parent_id, fam['family_id'], same, vbases
-                    #, "%.2f" % v.call_rate, pctiles
+                    #, "%.2f" % v.call_rate,
                     ]) + '\n')
     return int(used > 0)
 
