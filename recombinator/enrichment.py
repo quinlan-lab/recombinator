@@ -64,7 +64,7 @@ def get_overlap_counts(Q, R, extend=10000, do_print=False):
             if do_print:
                 for st, en, smp, dq in q_hits:
                     if smp != sample_id: continue
-                    print("%s\t%d\t%d\t%s\t%s\t%d\t%d" % (chrom, start, end, dq.get('sample_id', dq.get('parent_id')), dq['family_id'], st, end))
+                    print("%s\t%d\t%d\t%s\t%s\t%d\t%d" % (chrom, st, en, dq.get('sample_id', dq.get('parent_id')), dq['family_id'], start, end))
 
             n += int(sample_id in set(q_samples))
     return n, a_pairs, b_pairs
