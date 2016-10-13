@@ -39,10 +39,12 @@ def variant_ok(v, HET, exclude=None, min_mean_depth=20, max_mean_depth=150, min_
     alts, depths = v.gt_alt_depths, v.gt_depths
 
     vab = alts[hets] / depths[hets].astype(float)
-    # test that all hets are in these bounds.
-    if np.any(~((vab > 0.3) & (vab < 0.7))): return False
 
-    if any(ss.binom_test(alts[k], depths[k]) < min_pval for k in hets):
+    h25 = 0.25 * len(hets)
+    # test that 75% hets are in these bounds.
+    if sum(~((vab > 0.3) & (vab < 0.7))) > h25: return False
+
+    if sum(ss.binom_test(alts[k], depths[k]) < min_pval for k in hets) > h25:
         return False
     if exclude is not None and 0 != len(exclude[v.CHROM].search(v.start, v.end)):
         return False
