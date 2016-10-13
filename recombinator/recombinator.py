@@ -295,7 +295,7 @@ def get_family_dict(fam, smp2idx, args):
             raise
     # unphased file-handles
     header = ['#chrom', 'start', 'end', 'parent_id', 'family_id', 'same',
-              'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'global_call_rate', 'family_allele_balance']
+              'dad', 'mom', 'sib1', 'sib2', 'family_depth', 'family_quals', 'global_call_rate', 'family_allele_balance']
     f['fh-dad'] = gzip.open("%s/fam%s/%s.dad.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-mom'] = gzip.open("%s/fam%s/%s.mom.bed.gz" % (args.prefix, sample.family_id, region), "w")
     f['fh-dad'].write('\t'.join(header) + '\n')
@@ -325,7 +325,7 @@ def get_family_dict(fam, smp2idx, args):
     return f
 
 def add_genotype_info(fam, gt_types=None,
-        gt_depths=None, gt_quals=None, gt_phases=None):
+                      gt_depths=None, gt_quals=None, gt_phases=None):
     """
     Assign the genotype info to each member in the family
     """
@@ -338,31 +338,13 @@ def add_genotype_info(fam, gt_types=None,
     if not gt_quals is None:
         fam['gt_qual'] = gt_quals[fam['idxs']]
 
-def passes_quality_control(fam, args):
-    """
-    Make sure the genotype data for the family is up to snuff
-    """
-    if UNKNOWN in fam['gt_type']:
-        return False
-
-    # any is much faster than np.any for small arrays.
-    if any(fam['gt_qual'] < args.min_gq):
-        return False
-
-    if any(fam['gt_depth'] < args.min_depth):
-        return False
-
-    return True
-
-
-def is_informative(fam):
+def is_informative(gt_types):
     """
     Is the site informative in the sense that to be useful for catching recombination,
     one parent must be HET and the other HOM.
     """
-    gt_types = fam['gt_type']  # order is dad, then mom
-    return (gt_types[1] in (HOM_ALT, HOM_REF) and gt_types[0] == HET) or \
-           (gt_types[0] in (HOM_REF, HOM_ALT) and gt_types[1] == HET)
+    return (gt_types[0] == HET and gt_types[1] in (HOM_ALT, HOM_REF)) or \
+           (gt_types[1] == HET and gt_types[0] in (HOM_REF, HOM_ALT))
 
 
 def get_allele_balance(v, has_ab):
@@ -400,6 +382,7 @@ def run(args):
     # build a dict of sample_id to sample index
     smp2idx = dict(zip(vcf.samples, range(len(vcf.samples))))
 
+
     # get the Ped objects for the family of interest
     if args.families is None:
         fams = ped.families.values()
@@ -408,9 +391,12 @@ def run(args):
     if len(fams) == 0:
         sys.exit('Families %s not found in ped file' % args.families)
 
+    _idx2fam = {smp2idx[s.sample_id]: s.family_id for s in ped.samples()}
+    idx2fam = np.array([_idx2fam[i] for i in range(len(_idx2fam))])
+    del _idx2fam
+
     # create a simple dictionary of info for each family member
-    fs = [get_family_dict(fam, smp2idx, args) for fam in fams]
-    del fam
+    fs = {fam.samples[0].family_id: get_family_dict(fam, smp2idx, args) for fam in fams}
 
     fsites = open("%s.sites" % args.prefix, "w")
     # fcalls contains the crossovers for all samples.
@@ -433,7 +419,7 @@ def run(args):
                 report_at = 100000
             if i == 100000:
                 report_at = 200000
-                for f in fs:
+                for f in fs.values():
                     for k in f:
                         if k.startswith('fh'): f[k].flush()
             sys.stderr.flush()
@@ -453,8 +439,15 @@ def run(args):
         sample_abs = None
         phased = all(gt_phases)
 
+        hets, = np.where(gt_types == 1)
+
+        het_fams = idx2fam[np.unique(hets)]
+
+        bad, = np.where((gt_quals < args.min_gq) | (gt_depths < args.min_depth) | (gt_types == UNKNOWN))
+        bad_fams = idx2fam[np.unique(bad)]
+
         nsites = 0 # track the number of families that had this as an informative site.
-        for f in fs:
+        for f in [fs[hf] for hf in set(het_fams) - set(bad_fams)]:
             # is_informative only needs gt_types, so we check that first...
 
             # ############## PHASED ####################
@@ -469,22 +462,12 @@ def run(args):
             info['pre'] += 1
 
             add_genotype_info(f, gt_types=gt_types)
-            # need exactly 1 het parent for unphased checks.
-            # check for common case of all 0's
-            if not any(f['gt_type']): continue
-            info['parents'] += 1
-
-
-            if not is_informative(f):
+            if not is_informative(f['gt_type']):
                 continue
             info['informative'] += 1
 
             # now wee need to add quality and depth.
             add_genotype_info(f, gt_quals=gt_quals, gt_depths=gt_depths)
-
-            if not passes_quality_control(f, args):
-                continue
-            info['qc'] += 1
 
             # detect crossovers.
             for parent, (p1, p2) in [("dad", (0, 1)), ("mom", (1, 0))]:
@@ -519,7 +502,9 @@ def run(args):
                 val = 1 if f['gt_type'][2] == f['gt_type'][3] else 0
                 f['fh-%s' % parent].write('\t'.join(str(s) for s in [v.CHROM, v.POS - 1, v.POS,
                         f['ids'][p1], f['family_id'], val, fam_bases,
-                        fam_depths, "%.2f" % v.call_rate, fam_abs]) + '\n')
+                        fam_depths,
+                        "|".join("%.1f" % val for val in f['gt_qual']),
+                        "%.2f" % v.call_rate, fam_abs]) + '\n')
 
         fsites.write("%s:%d\t%d\n" % (v.CHROM, v.POS, nsites))
         if nsites > 0:
@@ -529,7 +514,7 @@ def run(args):
     persec = i / float(time.time() - t0)
     print("finished at %s:%d (%.1f/sec) %.2f%% informative (%d/%d variants)" % (v.CHROM, v.POS,
         persec, 100.0 * nused/i, nused, i), file=sys.stderr)
-    kept = _remove_empty(fs)
+    kept = _remove_empty(fs.values())
     if not ":" in args.region:
         call_all(kept, args.prefix, min_sites=20)
 
