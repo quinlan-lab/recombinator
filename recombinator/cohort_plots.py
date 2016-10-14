@@ -48,7 +48,6 @@ def read_cytobands(cytobands):
     icytobands = defaultdict(list)
     if cytobands is None: return defaultdict(lambda: None)
     for toks in (l.rstrip().split() for l in ts.nopen(cytobands)):
-        print(toks)
         chrom = toks[0].replace('chr', '')
         icytobands[chrom].append((chrom, int(toks[1]), int(toks[2]), cytoband_colors[toks[4]]))
     return icytobands
@@ -71,11 +70,15 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
         xfh = open(xobed)
         header = next(xfh).rstrip().split("\t")
         parent_id = header.index('parent_id')
-        left_block = header.index('left-block')
+        try:
+            left_block = header.index('left-block')
+        except ValueError:
+            left_block = None
+
 
         for i, toks in enumerate(sorted(x.rstrip().split("\t") for x in xfh)):
 
-            if blocks:
+            if blocks and left_block:
                 se = toks[left_block].split(":")[1].split("-")
                 s, e = int(se[0]), int(se[1])
             else:
@@ -91,7 +94,8 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
                 if last_chrom is not None:
                     print("switching chrom: %s->%s" % (last_chrom, toks[0]),
                           file=sys.stderr)
-                    report_xo(last_chrom, d, lens, prefix, file=fhrates, cyto=cytobands[last_chrom])
+                    report_xo(last_chrom, d, lens, prefix, file=fhrates,
+                            cyto=cytobands[last_chrom], blocks=blocks)
                     d = {'1': np.zeros(e, dtype=np.uint16),
                          '2': np.zeros(e, dtype=np.uint16)}
                 lens = []
@@ -102,16 +106,20 @@ def run(xobeds, ped=None, prefix=None, min_size=0, max_size=sys.maxint,
 
         # get the last right block.
         if blocks and last_chrom is not None:
-            se = toks[header.index('right-block')].split(":")[1].split("-")
-            s, e = int(se[0]), int(se[1])
+            if left_block:
+                se = toks[header.index('right-block')].split(":")[1].split("-")
+                s, e = int(se[0]), int(se[1])
+            else:
+                s, e = int(toks[1]), int(toks[2])
             if (min_size < e - s < max_size):
                 sample_counts[sex[pid]][pid] += 1
                 pid = toks[parent_id]
                 lens.append(e - s)
                 d[sex[pid]][s:e] += 1
 
-        report_xo(last_chrom, d, lens, prefix, file=fhrates, cyto=cytobands[last_chrom])
-    plot_sample_counts(sample_counts, prefix)
+        report_xo(last_chrom, d, lens, prefix, file=fhrates,
+                cyto=cytobands[last_chrom], blocks=blocks)
+    plot_sample_counts(sample_counts, prefix, blocks=blocks)
 
 
 def fmtr(x, p):
@@ -127,19 +135,20 @@ def absfmtr(y, p):
         v = v[:-1]
     return v
 
-def plot_sample_counts(sample_counts, prefix):
+def plot_sample_counts(sample_counts, prefix, blocks=False):
     fig, ax = plt.subplots(1)
     ax.hist([np.array(sample_counts['1'].values()) / 2.0,
              np.array(sample_counts['2'].values()) / 2.0],
              20, label=['male', 'female'])
-    ax.set_xlabel('Recombinations per meiosis')
+    ax.set_xlabel('%s per meiosis' % ('GCs' if blocks else 'Recombinations'))
     ax.set_ylabel('Count', rotation='vertical')
     plt.legend()
-    plt.savefig('%s.recombinations-per-parent.png' % prefix)
+    plt.savefig('%s.%s-per-parent.png' % (prefix, ('GCs' if blocks else 'Recombinations')))
     plt.close()
 
 
-def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58, cyto=None):
+def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58, cyto=None,
+    blocks=False):
 
     fig, axes = plt.subplots(3, 1,
                 gridspec_kw={'wspace': 0, 'hspace': 0, 'height_ratios': [15,
@@ -216,7 +225,7 @@ def report_xo(chrom, d, lens, prefix, file=sys.stdout, zcutoff=2.58, cyto=None):
     ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(absfmtr))
     ax.text(0.015, 0.88, "chromosome: " + chrom, transform=ax.transAxes)
     ax.legend(loc='upper right')
-    axes[1].set_ylabel('Samples with crossover', rotation='vertical')
+    axes[1].set_ylabel('Samples with %s' % ('gene conversion' if blocks else 'crossover'), rotation='vertical')
     axes[1].yaxis.set_label_position("right")
 
     axes[2].set_xlabel('Genomic position')
